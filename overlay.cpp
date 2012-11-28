@@ -10,6 +10,8 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 
+using namespace std;
+
 int main(int argc, char** argv) {
 	struct addrinfo known, *server;
 	memset(&known, 0, sizeof known);
