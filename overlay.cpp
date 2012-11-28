@@ -1,5 +1,5 @@
-//Router
 //Libraries
+#include "cs3516sock.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -13,9 +13,9 @@
 int main(int argc, char** argv) {
 	struct addrinfo known, *server;
 	memset(&known, 0, sizeof known);
-	hints.ai_family = AF_UNSPEC;
-	hints.ai_socktype = SOCK_DGRAM;
-	hints.ai_flags = AI_PASSIVE;
+	known.ai_family = AF_UNSPEC;
+	known.ai_socktype = SOCK_DGRAM;
+	known.ai_flags = AI_PASSIVE;
 	
 	
 	return 0;
