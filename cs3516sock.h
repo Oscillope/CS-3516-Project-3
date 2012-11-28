@@ -33,7 +33,8 @@ int create_cs3516_socket() {
 
 int cs3516_recv(int sock, char *buffer, int buff_size) {
     struct sockaddr_in from;
-    int fromlen, n;
+    socklen_t fromlen;
+    int n;
     fromlen = sizeof(struct sockaddr_in);
     n = recvfrom(sock, buffer, buff_size, 0,
                  (struct sockaddr *) &from, &fromlen);
