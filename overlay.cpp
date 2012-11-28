@@ -13,12 +13,10 @@
 using namespace std;
 
 int main(int argc, char** argv) {
-	struct addrinfo known, *server;
-	memset(&known, 0, sizeof known);
-	known.ai_family = AF_UNSPEC;
-	known.ai_socktype = SOCK_DGRAM;
-	known.ai_flags = AI_PASSIVE;
-	
-	
+	int socket;
+    socket = create_cs3516_socket();
+    char* recvbuf;
+    cs3516_recv(socket, recvbuf, 1024);
+    printf("%s\n",recvbuf);
 	return 0;
 }
