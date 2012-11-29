@@ -11,7 +11,27 @@
 int main(int argc, char** argv) {
     int datalen = 10;
     char data[10];
-
+while((o = getopt(argc, argv, "s:c:h")) != -1) {
+		switch(o) {
+			case 'c':
+				//TODO enter client mode
+				break;
+			case 's':
+				//TODO enter server mode
+				break;
+			case 'h':
+				printf("Specify client with -c or server with -s\n");
+				exit(0);
+				break;
+			case '?':
+				else {
+					fprintf(stderr, "Unknown option -%c.\n", optopt);
+					printf("Specify client with -c or server with -s\n");
+					exit(0);
+				}
+				break;
+		}
+	}
     struct iphdr overlayIP;
     //We're using IPv4
     overlayIP.version=4;
