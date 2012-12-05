@@ -7,11 +7,15 @@
 #include <arpa/inet.h>
 #include <netinet/ip.h>
 #include <netinet/udp.h>
+#include <iostream>
 #include <deque>
+#include <string>
+#include <sstream>
 #define TRUE 1
 #define FALSE 0
 #define MAX_PACKET_SIZE 1024
 #define ROUTER_QUEUE_SIZE 10
+using namespace std;
 void router(void);
 void host(void);
 int main(int argc, char** argv) {
@@ -39,7 +43,7 @@ void router(void){
     printf("I am a router!\n");
     //bind socket 
     int sockfd = create_cs3516_socket();
-    std::deque<char*> outputbuffer;
+    deque<char*> outputbuffer;
     while(TRUE){
         char *receivebuffer = (char*)malloc(MAX_PACKET_SIZE);
         cs3516_recv(sockfd, receivebuffer, MAX_PACKET_SIZE);
@@ -105,4 +109,27 @@ void host(void){
     //TODO non blocking receives and processing of received packets
     char receivebuffer[MAX_PACKET_SIZE];
     cs3516_recv(sockfd, receivebuffer, MAX_PACKET_SIZE);
+}
+void writetolog(string srcip, string dstip, string ipident, string statuscode, string nexthop){
+    char ftime[256];
+    time_t ctime = time(NULL);
+    struct tm *thetime;
+    thetime = localtime(&ctime);
+    strftime(ftime, 256, "%s", thetime);
+    stringstream sstream;
+    string message;
+    string timestr = string(ftime);
+    //UNIXTIME SOURCE_OVERLAY_IP DEST_OVELRAY_IP IP_IDENT STATUS_CODE [NEXT_HOP]
+    if(nexthop!=NULL){
+        sstream << " " << timestr << " " << srcip << " " << dstip << " " << ipident << " " << statuscode << " " << nexthop << endl;
+    } else {
+        sstream << " " << timestr << " " << srcip << " " << dstip << " " << ipident << " " << statuscode << endl;
+    }
+    sstream >> message;
+    cout << message;
+
+    FILE *fp;
+    fp=fopen("ROUTER_control.txt", "a");
+    fputs((char*)message.c_str(), fp);
+    fclose(fp);
 }
