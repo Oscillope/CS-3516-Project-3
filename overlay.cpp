@@ -2,7 +2,7 @@
 #include "cs3516sock.h"
 //C Standard Libraries
 #include <stdio.h>
-#include <string.h>
+#include <string>
 #include <stdlib.h>
 #include <unistd.h>
 //Networking Libraries
@@ -10,29 +10,57 @@
 #include <netinet/ip.h>
 #include <netinet/udp.h>
 //C++ Libraries
-#include <iostream>
 #include <deque>
-#include <string>
 #include <sstream>
+#include <iostream>
+#include <map>
+using namespace std;
+
 #define TRUE 1
 #define FALSE 0
 #define MAX_PACKET_SIZE 1024
 #define ROUTER_QUEUE_SIZE 10
-using namespace std;
+#define MAX_SIZE 4096
+
 void router(void);
 void host(void);
+void readConfig(string filename);
+int nextSize(char getSize[MAX_SIZE], int cursor);
+
+struct globalConf {
+	int queueLength;
+	int defaultTTL;
+};
+struct routerConf {
+	int sendDelay;
+	int router2ID;
+	int router2Delay;
+};
+struct hostConf {
+	int sendDelay;
+	string overlayPrefix;
+	int endHostID;
+	int endHostDelay;
+};
+globalConf configuration;
+map<int,string> routerIPs;
+map<int,string> endIPs;
+map<int,routerConf> routerRouter;
+map<int,hostConf> routerEnd;
 
 int main(int argc, char** argv) {
     int o;
+    string configPath;
+    bool isRouter = FALSE;
     while((o = getopt(argc, argv, "rh")) != -1) {
 		switch(o) {
 			case 'r':
 				//enter router mode
-				router();
+				isRouter = TRUE;
 				break;
 			case 'h':
 				//enter host mode
-				host();
+				isRouter = FALSE;
 				break;
 			case '?':
 			    fprintf(stderr, "Unknown option -%c.\n", optopt);
@@ -41,8 +69,68 @@ int main(int argc, char** argv) {
 				break;
 		}
 	}
+	configPath = (string)argv[optind];
+	if(configPath.empty()) {
+		printf("Please, you must provide a filename.\n");
+		printf("Usage: overlay [-r -h] config.conf\n");
+		exit(1);
+	}
+	readConfig(configPath);
+	if(isRouter) router();
+	else host();
 	return 0;
 }
+
+void readConfig(string filename) {
+	FILE *fp;
+	char* cname;
+	char config[MAX_SIZE];
+	char* curItem;
+	curItem = new char[MAX_SIZE];
+	int size;
+	cname = new char[filename.size()+1];
+	strcpy(cname, filename.c_str());
+	fp = fopen(cname, "r");
+	fread(config, sizeof(char), MAX_SIZE, fp);
+	#ifdef DEBUG
+		if(!ferror(fp)) printf("Successfully read the config file! Let me try to parse that for you.\n");
+		else fprintf(stderr, "An error occurred while reading the config file. Sorry about that.\n");
+	#endif
+	unsigned int i = 0;
+	while(i != strlen(config)+1)
+		switch(config[i]) {
+			case '0':
+				#ifdef DEBUG
+					printf("Global configuration found! I'm so excited!\n");
+				#endif
+				i += 2;
+				size = nextSize(config, i);
+				for(int j = 0; j < size; j++) curItem[j] = config[i+j];
+				i += size+1;
+				configuration.defaultTTL = atoi(curItem);
+				curItem = new char[MAX_SIZE];
+				size = nextSize(config, i);
+				for(int j = 0; j < size; j++) curItem[j] = config[i+j];
+				configuration.queueLength = atoi(curItem);
+				#ifdef DEBUG
+					printf("Parsed global configuration as TTL = %d and Queue Length = %d. Good choices!\n", configuration.defaultTTL, configuration.queueLength);
+				#endif
+				break;
+		};
+}
+
+int nextSize(char getSize[MAX_SIZE], int cursor) {
+	int size = 0;
+	while(getSize[cursor] != ' ' && getSize[cursor] != '\n') {
+		size++;
+		cursor++;
+	}
+	#ifdef DEBUG
+		printf("Size of next element: %d\n", size);
+	#endif
+	return size;
+}
+
 void router(void){
     cout << "I am a router!" << endl;
     //bind socket 
@@ -109,7 +197,6 @@ void host(void){
     cs3516_send(sockfd, packetbuffer, overlayIP.tot_len, overlayIP.saddr);
     //once we have sent the packet we don't need to keep it
     free(packetbuffer);
-    
     //TODO non blocking receives and processing of received packets
     char receivebuffer[MAX_PACKET_SIZE];
     cs3516_recv(sockfd, receivebuffer, MAX_PACKET_SIZE);
