@@ -1,6 +1,11 @@
+#include <stdlib.h>
 #include <list>
 #include <string>
 using namespace std;
+struct cidrprefix{
+    uint32_t prefix;
+    char size;
+};
 struct trienode {
     struct trienode* onechild;
     struct trienode* zerochild;
@@ -9,8 +14,8 @@ struct trienode {
 class trie {
     public:
         trie();
-        void insert(string prefix, string interface);
-        string search(string ip);
+        void insert(struct cidrprefix prefix, string interface);
+        string search(uint32_t ip);
     private:
         struct trienode listhead;
         list<struct trienode> nodes;
@@ -19,10 +24,10 @@ class trie {
 trie::trie(): listhead(), nodes(1, listhead) {
 }
 
-void trie::insert(string prefix, string interface){
+void trie::insert(struct cidrprefix prefix, string interface){
    //insert
 }
 
-string trie::search(string ip) {
+string trie::search(uint32_t ip) {
    return "";
 }
