@@ -1,5 +1,6 @@
 //Project Specific Libraries
 #include "cs3516sock.h"
+#include "trie.h"
 //C Standard Libraries
 #include <stdio.h>
 #include <string>
