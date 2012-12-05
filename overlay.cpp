@@ -21,6 +21,7 @@
 using namespace std;
 void router(void);
 void host(void);
+
 int main(int argc, char** argv) {
     int o;
     while((o = getopt(argc, argv, "rh")) != -1) {
