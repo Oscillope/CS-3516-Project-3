@@ -25,6 +25,7 @@
 *.log
 *.sql
 *.sqlite
+ROUTER_control.txt
 
 # OS generated files #
 ######################
