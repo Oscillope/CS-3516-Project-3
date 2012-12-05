@@ -20,13 +20,56 @@ class trie {
         list<struct trienode> nodes;
 };
 
+/*trienode::trienode(): onechild(NULL), zerochild(NULL), value(""){
+}*/
+
 trie::trie(): listhead(), nodes(1, listhead) {
 }
 
 void trie::insert(struct cidrprefix prefix, string interface){
-   //insert
+    struct trienode *currentnode = &(this->listhead);
+    struct trienode *nextnode;
+    for(int i = 0; i<prefix.size; i++){
+        uint32_t mask = 0x80000000>>i;
+        if(mask&prefix.prefix){
+            if(currentnode->onechild==NULL){
+                struct trienode newnode;
+                (this->nodes).push_back(newnode);
+                nextnode = &(this->nodes).back();
+                currentnode->onechild = nextnode;
+            } else {
+                nextnode = currentnode->onechild;
+            }
+        } else {
+            if(currentnode->zerochild==NULL){
+                struct trienode newnode;
+                (this->nodes).push_back(newnode);
+                nextnode = &(this->nodes).back();
+                currentnode->zerochild = nextnode;
+            } else {
+                nextnode = currentnode->zerochild;
+            }
+        }
+        currentnode = nextnode;
+    }
+    currentnode->value = interface;
 }
 
 string trie::search(uint32_t ip) {
-   return "";
+    string lastval = "";
+    struct trienode *currentnode = &(this->listhead);
+    int i = 0;
+    while((currentnode!=NULL)&&i<32){
+        uint32_t mask = 0x80000000>>i;
+        i++;
+        if(!(currentnode->value).compare("")){
+            lastval=currentnode->value;
+        }
+        if(mask&ip){
+            currentnode=currentnode->onechild;
+        }else{
+            currentnode=currentnode->zerochild;
+        }
+    }
+    return lastval;
 }
