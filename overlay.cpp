@@ -7,9 +7,11 @@
 #include <arpa/inet.h>
 #include <netinet/ip.h>
 #include <netinet/udp.h>
+#include <deque>
 #define TRUE 1
 #define FALSE 0
 #define MAX_PACKET_SIZE 1024
+#define ROUTER_QUEUE_SIZE 10
 void router(void);
 void host(void);
 int main(int argc, char** argv) {
@@ -37,17 +39,21 @@ void router(void){
     printf("I am a router!\n");
     //bind socket 
     int sockfd = create_cs3516_socket();
+    std::deque<char*> outputbuffer;
     while(TRUE){
-        char receivebuffer[MAX_PACKET_SIZE];
+        char *receivebuffer = (char*)malloc(MAX_PACKET_SIZE);
         cs3516_recv(sockfd, receivebuffer, MAX_PACKET_SIZE);
         iphdr *ip = (iphdr*)receivebuffer;
         (ip->ttl)--;
-        if((ip->ttl)>0){
-            //TODO fix destination host
-            cs3516_send(sockfd, receivebuffer, MAX_PACKET_SIZE, ip->saddr);
+        if((ip->ttl)>0 || outputbuffer.size()<=ROUTER_QUEUE_SIZE){
+            outputbuffer.push_back(receivebuffer);
         } else {
             //drop the packet
         }
+        //TODO fix destination host
+        cs3516_send(sockfd, outputbuffer.front(), MAX_PACKET_SIZE, ip->saddr);
+        free(outputbuffer.front());
+        outputbuffer.pop_front();
     }
 }
 void host(void){
