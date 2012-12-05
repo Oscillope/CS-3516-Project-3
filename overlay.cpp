@@ -1,12 +1,15 @@
-//Libraries
+//Project Specific Libraries
 #include "cs3516sock.h"
+//C Standard Libraries
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
+//Networking Libraries
 #include <arpa/inet.h>
 #include <netinet/ip.h>
 #include <netinet/udp.h>
+//C++ Libraries
 #include <iostream>
 #include <deque>
 #include <string>
@@ -32,7 +35,7 @@ int main(int argc, char** argv) {
 				break;
 			case '?':
 			    fprintf(stderr, "Unknown option -%c.\n", optopt);
-			    printf("Specify host with -h or router with -r\n");
+			    cout << "Specify host with -h or router with -r" << endl;
 			    exit(0);
 				break;
 		}
@@ -40,7 +43,7 @@ int main(int argc, char** argv) {
 	return 0;
 }
 void router(void){
-    printf("I am a router!\n");
+    cout << "I am a router!" << endl;
     //bind socket 
     int sockfd = create_cs3516_socket();
     deque<char*> outputbuffer;
@@ -61,7 +64,7 @@ void router(void){
     }
 }
 void host(void){
-    printf("I am a host!\n");
+    cout << "I am a host!" << endl;
     //bind socket 
     int sockfd = create_cs3516_socket();
     int datalen = 10;
@@ -120,7 +123,7 @@ void writetolog(string srcip, string dstip, string ipident, string statuscode, s
     string message;
     string timestr = string(ftime);
     //UNIXTIME SOURCE_OVERLAY_IP DEST_OVELRAY_IP IP_IDENT STATUS_CODE [NEXT_HOP]
-    if(nexthop!=NULL){
+    if(nexthop.length()!=0){
         sstream << " " << timestr << " " << srcip << " " << dstip << " " << ipident << " " << statuscode << " " << nexthop << endl;
     } else {
         sstream << " " << timestr << " " << srcip << " " << dstip << " " << ipident << " " << statuscode << endl;
