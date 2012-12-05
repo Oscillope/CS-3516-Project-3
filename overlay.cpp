@@ -1,5 +1,6 @@
 //Project Specific Libraries
 #include "cs3516sock.h"
+#include "trie.h"
 //C Standard Libraries
 #include <stdio.h>
 #include <string>
@@ -97,7 +98,7 @@ void readConfig(string filename) {
 		else fprintf(stderr, "An error occurred while reading the config file. Sorry about that.\n");
 	#endif
 	unsigned int i = 0;
-	while(i != strlen(config)+1)
+	while(i != strlen(config)+1) {
 		switch(config[i]) {
 			case '0':
 				#ifdef DEBUG
@@ -115,8 +116,17 @@ void readConfig(string filename) {
 				#ifdef DEBUG
 					printf("Parsed global configuration as TTL = %d and Queue Length = %d. Good choices!\n", configuration.defaultTTL, configuration.queueLength);
 				#endif
+				i += size+1;
 				break;
-		};
+			case '1':
+				#ifdef DEBUG
+					printf("Ah, I see you've got some router identification. Let me get that sorted out.\n");
+				#endif
+				i += 2;
+				
+				
+		}
+		
 }
 
 int nextSize(char getSize[MAX_SIZE], int cursor) {
