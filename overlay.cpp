@@ -32,6 +32,10 @@ struct globalConf {
 	int queueLength;
 	int defaultTTL;
 };
+struct hostIP {
+	string real;
+	string overlay;
+};
 struct routerConf {
 	int sendDelay;
 	int router2ID;
@@ -45,7 +49,7 @@ struct hostConf {
 };
 globalConf configuration;
 map<int,string> routerIPs;
-map<int,string> endIPs;
+map<int,hostIP> endIPs;
 map<int,routerConf> routerRouter;
 map<int,hostConf> routerEnd;
 
@@ -88,7 +92,7 @@ void readConfig(string filename) {
 	char config[MAX_SIZE];
 	char* curItem;
 	curItem = new char[MAX_SIZE];
-	int size;
+	int size, ID;
 	cname = new char[filename.size()+1];
 	strcpy(cname, filename.c_str());
 	fp = fopen(cname, "r");
@@ -107,11 +111,12 @@ void readConfig(string filename) {
 				i += 2;
 				size = nextSize(config, i);
 				for(int j = 0; j < size; j++) curItem[j] = config[i+j];
-				i += size+1;
+				curItem[size] = '\0';
 				configuration.defaultTTL = atoi(curItem);
-				curItem = new char[MAX_SIZE];
+				i += size+1;
 				size = nextSize(config, i);
 				for(int j = 0; j < size; j++) curItem[j] = config[i+j];
+				curItem[size] = '\0';
 				configuration.queueLength = atoi(curItem);
 				#ifdef DEBUG
 					printf("Parsed global configuration as TTL = %d and Queue Length = %d. Good choices!\n", configuration.defaultTTL, configuration.queueLength);
@@ -123,10 +128,47 @@ void readConfig(string filename) {
 					printf("Ah, I see you've got some router identification. Let me get that sorted out.\n");
 				#endif
 				i += 2;
-				
-				
+				size = nextSize(config, i);
+				for(int j = 0; j < size; j++) curItem[j] = config[i+j];
+				curItem[size] = '\0';
+				ID = atoi(curItem);
+				i += size+1;
+				size = nextSize(config, i);
+				for(int j = 0; j < size; j++) curItem[j] = config[i+j];
+				curItem[size] = '\0';
+				routerIPs[ID] = (string)curItem;
+				#ifdef DEBUG
+					cout << "Looks like you've got a router with ID number " << ID << " and real IP " << routerIPs[ID] << "." << endl;
+				#endif
+				i += size+1;
+				break;
+			case '2':
+				#ifdef DEBUG
+					printf("Whoa, some clients! I love those guys.\n");
+				#endif
+				i += 2;
+				size = nextSize(config, i);
+				for(int j = 0; j < size; j++) curItem[j] = config[i+j];
+				curItem[size] = '\0';
+				ID = atoi(curItem);
+				i += size+1;
+				size = nextSize(config, i);
+				char* realIP = new char[MAX_SIZE];
+				for(int j = 0; j < size; j++) realIP[j] = config[i+j];
+				realIP[size] = '\0';
+				i += size+1;
+				size = nextSize(config, i);
+				for(int j = 0; j < size; j++) curItem[j] = config[i+j];
+				curItem[size] = '\0';
+				endIPs[ID].real = (string)realIP;
+				endIPs[ID].overlay = (string)curItem;
+				#ifdef DEBUG
+					cout << "Looks like you've got an end host with ID number " << ID << ", real IP " << endIPs[ID].real << ", and overlay IP " << endIPs[ID].overlay << "." << endl;
+				#endif
+				i += size+1;
+				break;
 		}
-		
+	}
 }
 
 int nextSize(char getSize[MAX_SIZE], int cursor) {
