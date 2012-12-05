@@ -3,7 +3,7 @@ CFLAGS = -Wall
 
 all: overlay
 debug: CFLAGS += -DDEBUG
-debug: overlay overlay_client
+debug: overlay
 overlay: overlay.o
 	$(CC) $(CFLAGS) overlay.o -o overlay
 overlay.o:
