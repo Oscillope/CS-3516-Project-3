@@ -30,7 +30,7 @@ void readConfig(string filename);
 int nextSize(char getSize[MAX_SIZE], int cursor);
 
 struct globalConf {
-	int queueLength;
+	unsigned int queueLength;
 	int defaultTTL;
 };
 struct hostIP {
@@ -291,21 +291,50 @@ void router(void){
     cout << "I am a router!" << endl;
     //bind socket 
     int sockfd = create_cs3516_socket();
-    deque<char*> outputbuffer;
+    map<string, deque<char*> > outputbuffers;
     while(TRUE){
         char *receivebuffer = (char*)malloc(MAX_PACKET_SIZE);
+        //TODO non-blocking recv
         cs3516_recv(sockfd, receivebuffer, MAX_PACKET_SIZE);
         iphdr *ip = (iphdr*)receivebuffer;
+        
+        //Get some strings
+        /*char srcstr[INET_ADDRSTRLEN], dststr[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &(ip->saddr), srcstr, INET_ADDRSTRLEN);
+	    inet_ntop(AF_INET, &(ip->daddr), dststr, INET_ADDRSTRLEN);*/
+	    
+	    //get the real ip address of the destination
+	    string interface = hosts.search((uint32_t)(ip->daddr));
+	    deque<char*> outputqueue;
+	    //get the output queue
+	    if(outputbuffers.find(interface)!=outputbuffers.end()){
+	        outputqueue = outputbuffers.find(interface)->second;
+	    } else {
+	        //we don't know who this is! Log it and drop that packet like it's hot
+	    }
+	    //decrement the ttl value
         (ip->ttl)--;
-        if((ip->ttl)>0 || outputbuffer.size()<=ROUTER_QUEUE_SIZE){
-            outputbuffer.push_back(receivebuffer);
+        //TODO break this up into multiple statements for logging
+        if((ip->ttl)>0 && outputqueue.size()<=configuration.queueLength){
+            outputqueue.push_back(receivebuffer);
         } else {
             //drop the packet
         }
         //TODO fix destination host
-        cs3516_send(sockfd, outputbuffer.front(), MAX_PACKET_SIZE, ip->saddr);
-        free(outputbuffer.front());
-        outputbuffer.pop_front();
+	    for(map<string, deque<char*> >::iterator i = outputbuffers.begin(); i != outputbuffers.end(); i++) {
+	    	string interface = (*i).first;
+	    	deque<char*> buffer = (*i).second;
+		    if(buffer.size()>0){
+		        //4 because IPv4
+		        char interfacebytes[4];
+		        //convert address to bytes
+		        inet_pton(AF_INET, (char*)interface.c_str(), interfacebytes);
+		        cs3516_send(sockfd, buffer.front(), MAX_PACKET_SIZE, (unsigned int)(*interfacebytes));
+                free(buffer.front());
+                buffer.pop_front();
+                break;
+		    }
+	    }
     }
 }
 void host(void){
@@ -320,7 +349,7 @@ void host(void){
     //TODO figure out what this should actually be...
     overlayIP.tos=0;
     //TODO set TTL based on input read
-    overlayIP.ttl=5;
+    overlayIP.ttl=configuration.defaultTTL;
     //We're going to be using UDP for all our packets
     overlayIP.protocol=IPPROTO_UDP;
     //TODO calculate packet sizes and checksums
