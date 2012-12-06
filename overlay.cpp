@@ -54,7 +54,6 @@ map<int,hostIP> endIPs;
 map<int,routerConf> routerRouter;
 map<int,hostConf> routerEnd;
 trie hosts;
-int numRouters = 0;
 
 int main(int argc, char** argv) {
     #ifdef SANDWICH
@@ -145,7 +144,6 @@ void readConfig(string filename) {
 				for(int j = 0; j < size; j++) curItem[j] = config[i+j];
 				curItem[size] = '\0';
 				routerIPs[ID] = (string)curItem;
-                numRouters++;
 				#ifdef DEBUG
 					cout << "Looks like you've got a router with ID number " << ID << " and real IP " << routerIPs[ID] << "." << endl;
 				#endif
@@ -263,21 +261,29 @@ int nextSize(char getSize[MAX_SIZE], int cursor) {
 }
 
 void makeTrie(void) {
-    int i = 0;
-    //char temp[12];
-    char* prefix = new char[15];
+    map<int, hostConf>::iterator j;
+    string::iterator stringit;
+    char* temp = new char[16];
+    string prestring;
+    char* size = new char[2];
     struct cidrprefix tempFix;
-    for(int j = 0; j < numRouters + 1; j++) {
-        strcpy(prefix, routerEnd[j].overlayPrefix.c_str());
-        while(prefix[i] != '\n') {
-            while(prefix[i] != '.') {
-                i++;
-            }
-            delete(&prefix[i]);
+    struct in_addr;
+    for(j = routerEnd.begin(); j != routerEnd.end(); j++) {
+        prestring = (j->second).overlayPrefix;
+        for(stringit = prestring.begin(); stringit != prestring.end(); stringit++) {
+			if(*stringit == '/') {
+				strcpy(temp, prestring.substr(0, distance(prestring.begin(),stringit)-1).c_str());
+				inet_pton(AF_INET, temp, (void *)tempFix.prefix);
+				stringit++;
+				size[0] = *stringit;
+				stringit++;
+				size[1] = *stringit;
+				break;
+			}
         }
-        tempFix.prefix = (uint32_t)atoi(prefix);
-        tempFix.size = (char)routerEnd[j].overlayPrefix.length();
-        hosts.insert(tempFix, routerIPs[j]);
+        tempFix.size = (char)atoi(size);
+        cout << "Prefix: " << tempFix.prefix << "/" << (int)tempFix.size << endl;
+        hosts.insert(tempFix, routerIPs[j->first]);
     }
 }
 
