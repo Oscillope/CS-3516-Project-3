@@ -33,8 +33,8 @@ void trie::insert(struct cidrprefix prefix, string interface){
         uint32_t mask = 0x80000000>>i;
         if(mask&prefix.prefix){
             if(currentnode->onechild==NULL){
-                struct trienode newnode;
-                (this->nodes).push_back(newnode);
+                struct trienode *newnode = new trienode();
+                (this->nodes).push_back(*newnode);
                 nextnode = &(this->nodes).back();
                 currentnode->onechild = nextnode;
             } else {
@@ -42,8 +42,9 @@ void trie::insert(struct cidrprefix prefix, string interface){
             }
         } else {
             if(currentnode->zerochild==NULL){
-                struct trienode newnode;
-                (this->nodes).push_back(newnode);
+                printf("Node does not exist! Creating new node.\n");
+                struct trienode *newnode = new trienode();
+                (this->nodes).push_back(*newnode);
                 nextnode = &(this->nodes).back();
                 currentnode->zerochild = nextnode;
             } else {
