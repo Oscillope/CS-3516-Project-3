@@ -272,8 +272,8 @@ void makeTrie(void) {
         prestring = (j->second).overlayPrefix;
         for(stringit = prestring.begin(); stringit != prestring.end(); stringit++) {
 			if(*stringit == '/') {
-				strcpy(temp, prestring.substr(0, distance(prestring.begin(),stringit)-1).c_str());
-				inet_pton(AF_INET, temp, (void *)tempFix.prefix);
+				strcpy(temp, prestring.substr(0, distance(prestring.begin(),stringit)).c_str());
+				inet_pton(AF_INET, temp, (void *)&tempFix.prefix);
 				stringit++;
 				size[0] = *stringit;
 				stringit++;
@@ -282,7 +282,9 @@ void makeTrie(void) {
 			}
         }
         tempFix.size = (char)atoi(size);
-        cout << "Prefix: " << tempFix.prefix << "/" << (int)tempFix.size << endl;
+        #ifdef DEBUG
+			cout << "Prefix: " << tempFix.prefix << "/" << (int)tempFix.size << endl;
+		#endif
         hosts.insert(tempFix, routerIPs[j->first]);
     }
 }
