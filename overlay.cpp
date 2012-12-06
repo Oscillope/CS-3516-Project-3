@@ -25,6 +25,7 @@ using namespace std;
 
 void router(void);
 void host(void);
+void makeTrie(void);
 void readConfig(string filename);
 int nextSize(char getSize[MAX_SIZE], int cursor);
 
@@ -52,8 +53,13 @@ map<int,string> routerIPs;
 map<int,hostIP> endIPs;
 map<int,routerConf> routerRouter;
 map<int,hostConf> routerEnd;
+trie hosts;
+int numRouters = 0;
 
 int main(int argc, char** argv) {
+    #ifdef SANDWICH
+        printf("I'm a sandwich!\n");
+    #endif
     int o;
     string configPath;
     bool isRouter = FALSE;
@@ -81,6 +87,7 @@ int main(int argc, char** argv) {
 		exit(1);
 	}
 	readConfig(configPath);
+    makeTrie();
 	if(isRouter) router();
 	else host();
 	return 0;
@@ -92,6 +99,7 @@ void readConfig(string filename) {
 	char config[MAX_SIZE];
 	char* curItem;
 	curItem = new char[MAX_SIZE];
+    char* realIP = new char[MAX_SIZE];
 	int size, ID;
 	cname = new char[filename.size()+1];
 	strcpy(cname, filename.c_str());
@@ -102,7 +110,7 @@ void readConfig(string filename) {
 		else fprintf(stderr, "An error occurred while reading the config file. Sorry about that.\n");
 	#endif
 	unsigned int i = 0;
-	while(i != strlen(config)+1) {
+	while(i != strlen(config)) {
 		switch(config[i]) {
 			case '0':
 				#ifdef DEBUG
@@ -137,6 +145,7 @@ void readConfig(string filename) {
 				for(int j = 0; j < size; j++) curItem[j] = config[i+j];
 				curItem[size] = '\0';
 				routerIPs[ID] = (string)curItem;
+                numRouters++;
 				#ifdef DEBUG
 					cout << "Looks like you've got a router with ID number " << ID << " and real IP " << routerIPs[ID] << "." << endl;
 				#endif
@@ -153,7 +162,6 @@ void readConfig(string filename) {
 				ID = atoi(curItem);
 				i += size+1;
 				size = nextSize(config, i);
-				char* realIP = new char[MAX_SIZE];
 				for(int j = 0; j < size; j++) realIP[j] = config[i+j];
 				realIP[size] = '\0';
 				i += size+1;
@@ -167,6 +175,77 @@ void readConfig(string filename) {
 				#endif
 				i += size+1;
 				break;
+            case '3':
+                #ifdef DEBUG
+                    printf("All right! Defining some router to router links.\n");
+                #endif
+                i += 2;
+				size = nextSize(config, i);
+				for(int j = 0; j < size; j++) curItem[j] = config[i+j];
+				curItem[size] = '\0';
+				ID = atoi(curItem);
+				i += size+1;
+				size = nextSize(config, i);
+				int delay1, id2, delay2;
+				for(int j = 0; j < size; j++) curItem[j] = config[i+j];
+				curItem[size] = '\0';
+                delay1 = atoi(curItem);
+				i += size+1;
+				size = nextSize(config, i);
+				for(int j = 0; j < size; j++) curItem[j] = config[i+j];
+				curItem[size] = '\0';
+                id2 = atoi(curItem);
+                i += size+1;
+				size = nextSize(config, i);
+				for(int j = 0; j < size; j++) curItem[j] = config[i+j];
+				curItem[size] = '\0';
+                delay2 = atoi(curItem);
+				routerRouter[ID].sendDelay = delay1;
+                routerRouter[ID].router2ID = id2;
+                routerRouter[ID].router2Delay = delay2;
+                #ifdef DEBUG
+                    cout << "Ooh! Router" << ID << " has a sending delay of " << routerRouter[ID].sendDelay << ", and router " << routerRouter[ID].router2ID << " has a sending delay of " << routerRouter[ID].router2Delay << "." << endl;
+                #endif
+				i += size+1;
+				break;
+            case '4':
+                #ifdef DEBUG
+                    printf("YAAAAAY END HOST LINKS!\n");
+                #endif
+                i += 2;
+				size = nextSize(config, i);
+				for(int j = 0; j < size; j++) curItem[j] = config[i+j];
+				curItem[size] = '\0';
+				ID = atoi(curItem);
+				i += size+1;
+				size = nextSize(config, i);
+				for(int j = 0; j < size; j++) curItem[j] = config[i+j];
+				curItem[size] = '\0';
+                routerEnd[ID].sendDelay = atoi(curItem);
+				i += size+1;
+				size = nextSize(config, i);
+				for(int j = 0; j < size; j++) curItem[j] = config[i+j];
+				curItem[size] = '\0';
+                routerEnd[ID].overlayPrefix = curItem;
+                i += size+1;
+				size = nextSize(config, i);
+				for(int j = 0; j < size; j++) curItem[j] = config[i+j];
+				curItem[size] = '\0';
+                routerEnd[ID].endHostID = atoi(curItem);
+                i += size+1;
+				size = nextSize(config, i);
+				for(int j = 0; j < size; j++) curItem[j] = config[i+j];
+				curItem[size] = '\0';
+                routerEnd[ID].endHostDelay = atoi(curItem);
+                #ifdef DEBUG
+                    cout << "Whoa there, cowboy! Router " << ID << " has a sending delay of " << routerEnd[ID].sendDelay << ", an overlay prefix of " << routerEnd[ID].overlayPrefix << " and is connected to host " << routerEnd[ID].endHostID << " with a delay of " << routerEnd[ID].endHostDelay << "." << endl;
+                #endif
+				i += size+1;
+				break;
+            default:
+                fprintf(stderr, "That is not a valid configuration option. Please check your configuration file, as it may have been corrupted.");
+                exit(1);
+                break;
 		}
 	}
 }
@@ -181,6 +260,25 @@ int nextSize(char getSize[MAX_SIZE], int cursor) {
 		printf("Size of next element: %d\n", size);
 	#endif
 	return size;
+}
+
+void makeTrie(void) {
+    int i = 0;
+    //char temp[12];
+    char* prefix = new char[15];
+    struct cidrprefix tempFix;
+    for(int j = 0; j < numRouters + 1; j++) {
+        strcpy(prefix, routerEnd[j].overlayPrefix.c_str());
+        while(prefix[i] != '\n') {
+            while(prefix[i] != '.') {
+                i++;
+            }
+            delete(&prefix[i]);
+        }
+        tempFix.prefix = (uint32_t)atoi(prefix);
+        tempFix.size = (char)routerEnd[j].overlayPrefix.length();
+        hosts.insert(tempFix, routerIPs[j]);
+    }
 }
 
 void router(void){

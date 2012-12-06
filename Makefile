@@ -2,6 +2,8 @@ CC = g++
 CFLAGS = -Wall
 
 all: overlay
+me a sandwich: CFLAGS += -DSANDWICH
+me a sandwich: debug
 debug: CFLAGS += -DDEBUG
 debug: overlay
 overlay: overlay.o
