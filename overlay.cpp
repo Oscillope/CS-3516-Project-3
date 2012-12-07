@@ -315,36 +315,54 @@ void router(void){
     cout << "I am a router!" << endl;
     //bind socket 
     int sockfd = create_cs3516_socket();
+    //initialize for select() call
+    fd_set readfds;
+	FD_ZERO(&readfds);
+	FD_SET(sockfd, &readfds);
+	//We want a truly nonblocking call so...
+	struct timeval timeoutval;
+	timeoutval.tv_sec = 0;
+	timeoutval.tv_usec = 0;
     map<string, deque<char*> > outputbuffers;
     while(TRUE){
-        char *receivebuffer = (char*)malloc(MAX_PACKET_SIZE);
-        //TODO non-blocking recv
-        cs3516_recv(sockfd, receivebuffer, MAX_PACKET_SIZE);
-        iphdr *ip = (iphdr*)receivebuffer;
-        
-        //Get some strings
-        /*char srcstr[INET_ADDRSTRLEN], dststr[INET_ADDRSTRLEN];
-        inet_ntop(AF_INET, &(ip->saddr), srcstr, INET_ADDRSTRLEN);
-	    inet_ntop(AF_INET, &(ip->daddr), dststr, INET_ADDRSTRLEN);*/
-	    
-	    //get the real ip address of the destination
-	    string interface = hosts.search((uint32_t)(ip->daddr));
-	    deque<char*> outputqueue;
-	    //get the output queue
-	    if(outputbuffers.find(interface)!=outputbuffers.end()){
-	        outputqueue = outputbuffers.find(interface)->second;
-	    } else {
-	        //we don't know who this is! Log it and drop that packet like it's hot
-	    }
-	    //decrement the ttl value
-        (ip->ttl)--;
-        //TODO break this up into multiple statements for logging
-        if((ip->ttl)>0 && outputqueue.size()<=configuration.queueLength){
-            outputqueue.push_back(receivebuffer);
-        } else {
-            //drop the packet
+        //check if we have anything to read
+        select(sockfd+1, &readfds, NULL, NULL, &timeoutval);
+        //while we have a packet to receive, handle it
+        //TODO decide if this is good behavior
+        while(FD_ISSET(sockfd, &readfds)){
+            char *receivebuffer = (char*)malloc(MAX_PACKET_SIZE);
+            cs3516_recv(sockfd, receivebuffer, MAX_PACKET_SIZE);
+            iphdr *ip = (iphdr*)receivebuffer;
+            
+            //Get some strings
+            /*char srcstr[INET_ADDRSTRLEN], dststr[INET_ADDRSTRLEN];
+            inet_ntop(AF_INET, &(ip->saddr), srcstr, INET_ADDRSTRLEN);
+	        inet_ntop(AF_INET, &(ip->daddr), dststr, INET_ADDRSTRLEN);*/
+	        
+	        //get the real ip address of the destination
+	        string interface = hosts.search((uint32_t)(ip->daddr));
+	        deque<char*> outputqueue;
+	        //get the output queue
+	        if(outputbuffers.find(interface)!=outputbuffers.end()){
+	            outputqueue = outputbuffers.find(interface)->second;
+	        } else {
+	            //we don't know who this is! Log it and drop that packet like it's hot
+	        }
+	        //decrement the ttl value
+            (ip->ttl)--;
+            if((ip->ttl)>0){
+                if(outputqueue.size()<=configuration.queueLength){
+                    outputqueue.push_back(receivebuffer);
+                } else {
+                    //drop the packet and log
+                }
+            } else {
+                //drop the packet and log
+            }
+            select(sockfd+1, &readfds, NULL, NULL, &timeoutval);
         }
-        //TODO fix destination host
+        //look for the first interface with data to send and send one of their packets
+        //TODO decide if there is a better way to do this (one from each buffer?)
 	    for(map<string, deque<char*> >::iterator i = outputbuffers.begin(); i != outputbuffers.end(); i++) {
 	    	string interface = (*i).first;
 	    	deque<char*> buffer = (*i).second;
@@ -374,7 +392,6 @@ void host(void){
     overlayIP.version=4;
     //TODO figure out what this should actually be...
     overlayIP.tos=0;
-    //TODO set TTL based on input read
     overlayIP.ttl=configuration.defaultTTL;
     //We're going to be using UDP for all our packets
     overlayIP.protocol=IPPROTO_UDP;
