@@ -1,5 +1,6 @@
 #include <list>
 #include <string>
+#include <netinet/ip.h>
 using namespace std;
 struct cidrprefix{
     uint32_t prefix;
@@ -27,6 +28,7 @@ trie::trie(): listhead(), nodes(1, listhead) {
 }
 
 void trie::insert(struct cidrprefix prefix, string interface){
+    prefix.prefix = ntohl(prefix.prefix);
     struct trienode *currentnode = &(this->listhead);
     struct trienode *nextnode;
     for(int i = 0; i<prefix.size; i++){
@@ -58,13 +60,14 @@ void trie::insert(struct cidrprefix prefix, string interface){
 }
 
 string trie::search(uint32_t ip) {
+    ip = ntohl(ip);
     string lastval = "";
     struct trienode *currentnode = &(this->listhead);
     int i = 0;
     while((currentnode!=NULL)&&i<32){
         uint32_t mask = 0x80000000>>i;
         i++;
-        if(!(currentnode->value).compare("")){
+        if((currentnode->value).compare("")){
             lastval=currentnode->value;
         }
         if(mask&ip){

@@ -267,7 +267,6 @@ void makeTrie(void) {
     string prestring;
     char* size = new char[2];
     struct cidrprefix tempFix;
-    struct in_addr;
     for(j = routerEnd.begin(); j != routerEnd.end(); j++) {
         prestring = (j->second).overlayPrefix;
         for(stringit = prestring.begin(); stringit != prestring.end(); stringit++) {
