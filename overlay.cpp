@@ -91,17 +91,21 @@ int main(int argc, char** argv) {
     makeTrie();
     struct ifaddrs *demAddrs;
     if(getifaddrs(&demAddrs)) {
-		fprintf(stderr, "Couldn't get real IP address. Aborting.");
+		fprintf(stderr, "Couldn't get real IP address. Aborting.\n");
 		exit(1);
 	}
 	struct in_addr *myAddr;
 	char* addrBuf = new char[INET_ADDRSTRLEN];
 	struct sockaddr *mysockaddr = (demAddrs->ifa_addr);
-	while(strcmp(demAddrs->ifa_name, "wlan0")||(mysockaddr->sa_family!=AF_INET)) {
+	while(strcmp(demAddrs->ifa_name, "eth0")||(mysockaddr->sa_family!=AF_INET)) {
 		#ifdef DEBUG
 			cout << "Interface: " << demAddrs->ifa_name << ". NOPE!" << endl;
 		#endif
 	    demAddrs = demAddrs->ifa_next;
+	    if(demAddrs==NULL) {
+		    fprintf(stderr, "Couldn't find the specified interface. Aborting.\n");
+		    exit(1);
+	    }
 	    mysockaddr = (demAddrs->ifa_addr);
 	}
 	cout << "Interface: " << demAddrs->ifa_name << endl;
