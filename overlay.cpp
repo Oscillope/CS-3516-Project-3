@@ -95,20 +95,20 @@ int main(int argc, char** argv) {
 		exit(1);
 	}
 	struct in_addr *myAddr;
-	uint32_t myAddr_net;
-	char* addrBuf = new char[16];
-	while(strcmp(demAddrs->ifa_name, "eth0")) {
+	char* addrBuf = new char[INET_ADDRSTRLEN];
+	struct sockaddr *mysockaddr = (demAddrs->ifa_addr);
+	while(strcmp(demAddrs->ifa_name, "wlan0")||(mysockaddr->sa_family!=AF_INET)) {
 		#ifdef DEBUG
 			cout << "Interface: " << demAddrs->ifa_name << ". NOPE!" << endl;
 		#endif
-		demAddrs = demAddrs->ifa_next;
+	    demAddrs = demAddrs->ifa_next;
+	    mysockaddr = (demAddrs->ifa_addr);
 	}
 	cout << "Interface: " << demAddrs->ifa_name << endl;
-	myAddr = &(((sockaddr_in *)(demAddrs->ifa_addr))->sin_addr);
-	myAddr_net = htonl(myAddr->s_addr);
-	cout << "Raw address: " << myAddr_net << endl;
+	myAddr = &(((struct sockaddr_in*)mysockaddr)->sin_addr);
+	inet_ntop(AF_INET, (void *)myAddr, addrBuf, INET_ADDRSTRLEN);
 	#ifdef DEBUG
-		printf("My real IP address is: %s\n", inet_ntop(AF_INET, (void *)&myAddr_net, addrBuf, 16));
+		printf("My real IP address is: %s\n", addrBuf);
 	#endif
 	if(isRouter) router();
 	else host();
