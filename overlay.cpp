@@ -99,7 +99,7 @@ int main(int argc, char** argv) {
 	char* addrBuf = new char[16];
 	while(strcmp(demAddrs->ifa_name, "eth0")) {
 		#ifdef DEBUG
-			cout << "Interface: " << demAddrs->ifa_name << endl;
+			cout << "Interface: " << demAddrs->ifa_name << ". NOPE!" << endl;
 		#endif
 		demAddrs = demAddrs->ifa_next;
 	}
