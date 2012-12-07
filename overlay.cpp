@@ -6,7 +6,9 @@
 #include <string>
 #include <stdlib.h>
 #include <unistd.h>
+#include <sys/types.h>
 //Networking Libraries
+#include <ifaddrs.h>
 #include <arpa/inet.h>
 #include <netinet/ip.h>
 #include <netinet/udp.h>
@@ -87,6 +89,27 @@ int main(int argc, char** argv) {
 	}
 	readConfig(configPath);
     makeTrie();
+    struct ifaddrs *demAddrs;
+    if(getifaddrs(&demAddrs)) {
+		fprintf(stderr, "Couldn't get real IP address. Aborting.");
+		exit(1);
+	}
+	struct in_addr *myAddr;
+	uint32_t myAddr_net;
+	char* addrBuf = new char[16];
+	while(strcmp(demAddrs->ifa_name, "eth0")) {
+		#ifdef DEBUG
+			cout << "Interface: " << demAddrs->ifa_name << endl;
+		#endif
+		demAddrs = demAddrs->ifa_next;
+	}
+	cout << "Interface: " << demAddrs->ifa_name << endl;
+	myAddr = &(((sockaddr_in *)(demAddrs->ifa_addr))->sin_addr);
+	myAddr_net = htonl(myAddr->s_addr);
+	cout << "Raw address: " << myAddr_net << endl;
+	#ifdef DEBUG
+		printf("My real IP address is: %s\n", inet_ntop(AF_INET, (void *)&myAddr_net, addrBuf, 16));
+	#endif
 	if(isRouter) router();
 	else host();
 	return 0;
@@ -267,7 +290,6 @@ void makeTrie(void) {
     string prestring;
     char* size = new char[2];
     struct cidrprefix tempFix;
-    struct in_addr;
     for(j = routerEnd.begin(); j != routerEnd.end(); j++) {
         prestring = (j->second).overlayPrefix;
         for(stringit = prestring.begin(); stringit != prestring.end(); stringit++) {
@@ -283,7 +305,7 @@ void makeTrie(void) {
         }
         tempFix.size = (char)atoi(size);
         #ifdef DEBUG
-			cout << "Prefix: " << tempFix.prefix << "/" << (int)tempFix.size << endl;
+			cout << "Prefix: " << tempFix.prefix << "/" << (int)tempFix.size << " for router: " << routerIPs[j->first] << endl;
 		#endif
         hosts.insert(tempFix, routerIPs[j->first]);
     }
@@ -346,6 +368,8 @@ void host(void){
     int datalen = 10;
     char data[10];
     struct iphdr overlayIP;
+    
+    
     //We're using IPv4
     overlayIP.version=4;
     //TODO figure out what this should actually be...
