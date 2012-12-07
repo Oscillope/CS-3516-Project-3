@@ -21,6 +21,7 @@ using namespace std;
 
 #define TRUE 1
 #define FALSE 0
+#define IP_NOT_FOUND -1
 #define MAX_PACKET_SIZE 1024
 #define ROUTER_QUEUE_SIZE 10
 #define MAX_SIZE 4096
@@ -55,6 +56,7 @@ map<int,string> routerIPs;
 map<int,hostIP> endIPs;
 map<int,routerConf> routerRouter;
 map<int,hostConf> routerEnd;
+int hostID;
 trie hosts;
 
 int main(int argc, char** argv) {
@@ -63,7 +65,7 @@ int main(int argc, char** argv) {
     #endif
     int o;
     string configPath;
-    bool isRouter = FALSE;
+    char isRouter = IP_NOT_FOUND;
     while((o = getopt(argc, argv, "rh")) != -1) {
 		switch(o) {
 			case 'r':
@@ -97,23 +99,53 @@ int main(int argc, char** argv) {
 	struct in_addr *myAddr;
 	char* addrBuf = new char[INET_ADDRSTRLEN];
 	struct sockaddr *mysockaddr = (demAddrs->ifa_addr);
-	while(strcmp(demAddrs->ifa_name, "eth0")||(mysockaddr->sa_family!=AF_INET)) {
+	while((strcmp(demAddrs->ifa_name, "eth0") && strcmp(demAddrs->ifa_name, "eth1") && strcmp(demAddrs->ifa_name, "eth2") && strcmp(demAddrs->ifa_name, "eth3") && strcmp(demAddrs->ifa_name, "eth4"))||(mysockaddr->sa_family!=AF_INET)) {
 		#ifdef DEBUG
 			cout << "Interface: " << demAddrs->ifa_name << ". NOPE!" << endl;
 		#endif
 	    demAddrs = demAddrs->ifa_next;
 	    if(demAddrs==NULL) {
-		    fprintf(stderr, "Couldn't find the specified interface. Aborting.\n");
+		    fprintf(stderr, "Couldn't find the specified interface. Aborting. Sorry! Make sure your computer is set up properly.\n");
 		    exit(1);
 	    }
 	    mysockaddr = (demAddrs->ifa_addr);
 	}
-	cout << "Interface: " << demAddrs->ifa_name << endl;
+	#ifdef DEBUG
+		cout << "Interface: " << demAddrs->ifa_name << endl;
+	#endif
 	myAddr = &(((struct sockaddr_in*)mysockaddr)->sin_addr);
 	inet_ntop(AF_INET, (void *)myAddr, addrBuf, INET_ADDRSTRLEN);
 	#ifdef DEBUG
 		printf("My real IP address is: %s\n", addrBuf);
 	#endif
+	map<int, string>::iterator routeit;;
+	for(routeit = routerIPs.begin(); routeit != routerIPs.end(); routeit++) {
+		#ifdef DEBUG
+			cout << "Testing: " << (*routeit).second << endl;
+		#endif
+		if(!(*routeit).second.compare((string)addrBuf)) {
+			isRouter = TRUE;
+			hostID = (*routeit).first;
+			break;
+		}
+	}
+	if(isRouter == IP_NOT_FOUND) {
+		map<int, hostIP>::iterator endit;
+		for(endit = endIPs.begin(); endit != endIPs.end(); endit++) {
+			#ifdef DEBUG
+				cout << "Testing: " << (*endit).second.real << endl;
+			#endif
+			if(!(*endit).second.real.compare((string)addrBuf)) {
+				isRouter = FALSE;
+				hostID = (*endit).first;
+				break;
+			}
+		}
+	}
+	if(isRouter == IP_NOT_FOUND) {
+		fprintf(stderr, "I couldn't find your IP address in my memory banks. Please check to make sure your configuration file is correct.");
+		exit(1);
+	}
 	if(isRouter) router();
 	else host();
 	return 0;
@@ -172,7 +204,7 @@ void readConfig(string filename) {
 				curItem[size] = '\0';
 				routerIPs[ID] = (string)curItem;
 				#ifdef DEBUG
-					cout << "Looks like you've got a router with ID number " << ID << " and real IP " << routerIPs[ID] << "." << endl;
+					cout << "Looks like you've got a router with ID number " << ID << " and IP address " << routerIPs[ID] << "." << endl;
 				#endif
 				i += size+1;
 				break;
@@ -229,7 +261,7 @@ void readConfig(string filename) {
                 routerRouter[ID].router2ID = id2;
                 routerRouter[ID].router2Delay = delay2;
                 #ifdef DEBUG
-                    cout << "Ooh! Router" << ID << " has a sending delay of " << routerRouter[ID].sendDelay << ", and router " << routerRouter[ID].router2ID << " has a sending delay of " << routerRouter[ID].router2Delay << "." << endl;
+                    cout << "Ooh! Router " << ID << " has a sending delay of " << routerRouter[ID].sendDelay << ", and router " << routerRouter[ID].router2ID << " has a sending delay of " << routerRouter[ID].router2Delay << "." << endl;
                 #endif
 				i += size+1;
 				break;
@@ -315,8 +347,10 @@ void makeTrie(void) {
     }
 }
 
-void router(void){
-    cout << "I am a router!" << endl;
+void router(void) {
+	#ifdef DEBUG
+		cout << "I am router #" << hostID << "!" << endl;
+	#endif
     //bind socket 
     int sockfd = create_cs3516_socket();
     //initialize for select() call
@@ -384,7 +418,9 @@ void router(void){
     }
 }
 void host(void){
-    cout << "I am a host!" << endl;
+	#ifdef DEBUG
+		cout << "I am end host #" << hostID << "!" << endl;
+	#endif
     //bind socket 
     int sockfd = create_cs3516_socket();
     int datalen = 10;
@@ -401,7 +437,7 @@ void host(void){
     overlayIP.protocol=IPPROTO_UDP;
     //TODO calculate packet sizes and checksums
     //TODO read addresses from file
-    char* srcip = (char*)"1.1.1.1";
+    char* srcip = (char*)endIPs[hostID].overlay.c_str();
     char* dstip = (char*)"2.2.2.2";
     //set ip addresses in header
     inet_pton(AF_INET, srcip, &overlayIP.saddr);
