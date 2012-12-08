@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <time.h>
 //Networking Libraries
 #include <ifaddrs.h>
 #include <arpa/inet.h>
@@ -50,6 +51,10 @@ struct hostConf {
 	string overlayPrefix;
 	int endHostID;
 	int endHostDelay;
+};
+struct message {
+    time_t recvtime;
+    char *buffer;
 };
 globalConf configuration;
 map<int,string> routerIPs;
@@ -99,7 +104,7 @@ int main(int argc, char** argv) {
 	struct in_addr *myAddr;
 	char* addrBuf = new char[INET_ADDRSTRLEN];
 	struct sockaddr *mysockaddr = (demAddrs->ifa_addr);
-	while((strcmp(demAddrs->ifa_name, "eth0") && strcmp(demAddrs->ifa_name, "eth1") && strcmp(demAddrs->ifa_name, "eth2") && strcmp(demAddrs->ifa_name, "eth3") && strcmp(demAddrs->ifa_name, "eth4"))||(mysockaddr->sa_family!=AF_INET)) {
+	while((strcmp(demAddrs->ifa_name, "eth0") && strcmp(demAddrs->ifa_name, "eth1") && strcmp(demAddrs->ifa_name, "eth2") && strcmp(demAddrs->ifa_name, "eth3") && strcmp(demAddrs->ifa_name, "wlan0"))||(mysockaddr->sa_family!=AF_INET)) {
 		#ifdef DEBUG
 			cout << "Interface: " << demAddrs->ifa_name << ". NOPE!" << endl;
 		#endif
@@ -351,6 +356,7 @@ void router(void) {
 	#ifdef DEBUG
 		cout << "I am router #" << hostID << "!" << endl;
 	#endif
+	routerConf myconf = routerRouter[hostID];
     //bind socket 
     int sockfd = create_cs3516_socket();
     //initialize for select() call
@@ -361,16 +367,18 @@ void router(void) {
 	struct timeval timeoutval;
 	timeoutval.tv_sec = 0;
 	timeoutval.tv_usec = 0;
-    map<string, deque<char*> > outputbuffers;
+    map<string, deque<struct message *> > outputbuffers;
     while(TRUE){
         //check if we have anything to read
         select(sockfd+1, &readfds, NULL, NULL, &timeoutval);
         //while we have a packet to receive, handle it
         //TODO decide if this is good behavior
         while(FD_ISSET(sockfd, &readfds)){
-            char *receivebuffer = (char*)malloc(MAX_PACKET_SIZE);
-            cs3516_recv(sockfd, receivebuffer, MAX_PACKET_SIZE);
-            iphdr *ip = (iphdr*)receivebuffer;
+            struct message *receivemessage = new struct message();
+            receivemessage->buffer = (char*)malloc(MAX_PACKET_SIZE);
+            cs3516_recv(sockfd, receivemessage->buffer, MAX_PACKET_SIZE);
+            time(&(receivemessage->recvtime));
+            iphdr *ip = (iphdr*)(receivemessage->buffer);
             
             //Get some strings
             /*char srcstr[INET_ADDRSTRLEN], dststr[INET_ADDRSTRLEN];
@@ -379,7 +387,7 @@ void router(void) {
 	        
 	        //get the real ip address of the destination
 	        string interface = hosts.search((uint32_t)(ip->daddr));
-	        deque<char*> outputqueue;
+	        deque<struct message *> outputqueue;
 	        //get the output queue
 	        if(outputbuffers.find(interface)!=outputbuffers.end()){
 	            outputqueue = outputbuffers.find(interface)->second;
@@ -390,7 +398,7 @@ void router(void) {
             (ip->ttl)--;
             if((ip->ttl)>0){
                 if(outputqueue.size()<=configuration.queueLength){
-                    outputqueue.push_back(receivebuffer);
+                    outputqueue.push_back(receivemessage);
                 } else {
                     //drop the packet and log
                 }
@@ -401,18 +409,25 @@ void router(void) {
         }
         //look for the first interface with data to send and send one of their packets
         //TODO decide if there is a better way to do this (one from each buffer?)
-	    for(map<string, deque<char*> >::iterator i = outputbuffers.begin(); i != outputbuffers.end(); i++) {
+	    for(map<string, deque<struct message *> >::iterator i = outputbuffers.begin(); i != outputbuffers.end(); i++) {
 	    	string interface = (*i).first;
-	    	deque<char*> buffer = (*i).second;
+	    	deque<struct message *> buffer = (*i).second;
 		    if(buffer.size()>0){
-		        //4 because IPv4
-		        char interfacebytes[4];
-		        //convert address to bytes
-		        inet_pton(AF_INET, (char*)interface.c_str(), interfacebytes);
-		        cs3516_send(sockfd, buffer.front(), MAX_PACKET_SIZE, (unsigned int)(*interfacebytes));
-                free(buffer.front());
-                buffer.pop_front();
-                break;
+		        struct message* currentmsg = buffer.front();
+		        time_t currenttime;
+		        time(&currenttime);
+		        int waited = (int)difftime(currentmsg->recvtime, currenttime);
+		        //TODO use waited and wait time to determine if a packet should be sent
+		        if(waited>((double)myconf.sendDelay/1000)){
+		            //4 because IPv4
+		            char interfacebytes[4];
+		            //convert address to bytes
+		            inet_pton(AF_INET, (char*)interface.c_str(), interfacebytes);
+		            cs3516_send(sockfd, currentmsg->buffer, MAX_PACKET_SIZE, (unsigned int)(*interfacebytes));
+                    free(currentmsg->buffer);
+                    delete currentmsg;
+                    buffer.pop_front();
+                }
 		    }
 	    }
     }
