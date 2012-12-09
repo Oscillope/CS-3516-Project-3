@@ -26,6 +26,7 @@ using namespace std;
 #define MAX_PACKET_SIZE 1024
 #define ROUTER_QUEUE_SIZE 10
 #define MAX_SIZE 4096
+#define MAX_LINE_SIZE 128
 
 void router(void);
 void host(void);
@@ -438,6 +439,18 @@ void router(void) {
     }
 }
 void host(void){
+    FILE *fp = fopen("send_config.txt", "r");
+    char str[MAX_LINE_SIZE];
+    char dstip[INET_ADDRSTRLEN];
+    char srcport[6], destport[6];
+    if(fgets(str, MAX_LINE_SIZE, fp)!=NULL){
+        char * pch;
+        pch = strtok (str," ");
+        strcpy(srcport, pch);
+        pch = strtok (NULL, " ");
+        strcpy(destport, pch);
+        pch = strtok (NULL, " ");
+    }
 	#ifdef DEBUG
 		cout << "I am end host #" << hostID << "!" << endl;
 	#endif
@@ -459,15 +472,14 @@ void host(void){
     //TODO ip_ident
     //TODO read addresses from file
     char* srcip = (char*)endIPs[hostID].overlay.c_str();
-    char* dstip = (char*)"2.2.2.2";
     //set ip addresses in header
     inet_pton(AF_INET, srcip, &overlayIP.saddr);
     inet_pton(AF_INET, dstip, &overlayIP.daddr);
     
     struct udphdr overlayUDP;
     //We don't know what ports to use so...
-    overlayUDP.source=1337;
-    overlayUDP.dest=1337;
+    overlayUDP.source=htons(atoi(srcport));
+    overlayUDP.dest=htons(atoi(destport));;
     //We won't calculate the checksum for now
     overlayUDP.check=0;
     //just the header and the data
