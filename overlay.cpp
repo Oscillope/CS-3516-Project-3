@@ -32,6 +32,7 @@ void host(void);
 void makeTrie(void);
 void readConfig(string filename);
 int nextSize(char getSize[MAX_SIZE], int cursor);
+void writetolog(string srcip, string dstip, int ipident, string statuscode, string nexthop);
 
 struct globalConf {
 	unsigned int queueLength;
@@ -379,31 +380,35 @@ void router(void) {
             cs3516_recv(sockfd, receivemessage->buffer, MAX_PACKET_SIZE);
             time(&(receivemessage->recvtime));
             iphdr *ip = (iphdr*)(receivemessage->buffer);
-            
-            //Get some strings
-            /*char srcstr[INET_ADDRSTRLEN], dststr[INET_ADDRSTRLEN];
-            inet_ntop(AF_INET, &(ip->saddr), srcstr, INET_ADDRSTRLEN);
-	        inet_ntop(AF_INET, &(ip->daddr), dststr, INET_ADDRSTRLEN);*/
 	        
 	        //get the real ip address of the destination
 	        string interface = hosts.search((uint32_t)(ip->daddr));
 	        deque<struct message *> outputqueue;
+	        //Get some info from the packet for logging purposes
+	        char srcstr[INET_ADDRSTRLEN], dststr[INET_ADDRSTRLEN];
+            inet_ntop(AF_INET, &(ip->saddr), srcstr, INET_ADDRSTRLEN);
+	        inet_ntop(AF_INET, &(ip->daddr), dststr, INET_ADDRSTRLEN);
+	        short id = ntohs(ip->id);
 	        //get the output queue
 	        if(outputbuffers.find(interface)!=outputbuffers.end()){
 	            outputqueue = outputbuffers.find(interface)->second;
 	        } else {
 	            //we don't know who this is! Log it and drop that packet like it's hot
+	            writetolog(srcstr, dststr, id, "NO_ROUTE_TO_HOST", "");
 	        }
 	        //decrement the ttl value
             (ip->ttl)--;
             if((ip->ttl)>0){
                 if(outputqueue.size()<=configuration.queueLength){
                     outputqueue.push_back(receivemessage);
+                    writetolog(srcstr, dststr, id, "SENT_OK", interface);
                 } else {
                     //drop the packet and log
+                    writetolog(srcstr, dststr, id, "MAX_SENDQ_EXCEEDED", "");
                 }
             } else {
                 //drop the packet and log
+                writetolog(srcstr, dststr, id, "TTL_EXPIRED", "");
             }
             select(sockfd+1, &readfds, NULL, NULL, &timeoutval);
         }
@@ -451,6 +456,7 @@ void host(void){
     //We're going to be using UDP for all our packets
     overlayIP.protocol=IPPROTO_UDP;
     //TODO calculate packet sizes and checksums
+    //TODO ip_ident
     //TODO read addresses from file
     char* srcip = (char*)endIPs[hostID].overlay.c_str();
     char* dstip = (char*)"2.2.2.2";
@@ -484,26 +490,17 @@ void host(void){
     char receivebuffer[MAX_PACKET_SIZE];
     cs3516_recv(sockfd, receivebuffer, MAX_PACKET_SIZE);
 }
-void writetolog(string srcip, string dstip, string ipident, string statuscode, string nexthop){
+void writetolog(string srcip, string dstip, int ipident, string statuscode, string nexthop){
     char ftime[256];
     time_t ctime = time(NULL);
     struct tm *thetime;
     thetime = localtime(&ctime);
     strftime(ftime, 256, "%s", thetime);
-    stringstream sstream;
-    string message;
     string timestr = string(ftime);
     //UNIXTIME SOURCE_OVERLAY_IP DEST_OVELRAY_IP IP_IDENT STATUS_CODE [NEXT_HOP]
-    if(nexthop.length()!=0){
-        sstream << " " << timestr << " " << srcip << " " << dstip << " " << ipident << " " << statuscode << " " << nexthop << endl;
-    } else {
-        sstream << " " << timestr << " " << srcip << " " << dstip << " " << ipident << " " << statuscode << endl;
-    }
-    sstream >> message;
-    cout << message;
 
     FILE *fp;
     fp=fopen("ROUTER_control.txt", "a");
-    fputs((char*)message.c_str(), fp);
+    fprintf(fp, "%s %s %s %d %s %s\n", (char*)timestr.c_str(), (char*)srcip.c_str(), (char*)dstip.c_str(), ipident, (char*)statuscode.c_str(), (char*)nexthop.c_str());
     fclose(fp);
 }
