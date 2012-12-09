@@ -23,7 +23,7 @@ using namespace std;
 #define TRUE 1
 #define FALSE 0
 #define IP_NOT_FOUND -1
-#define MAX_PACKET_SIZE 1024
+#define MAX_PACKET_SIZE 1000
 #define ROUTER_QUEUE_SIZE 10
 #define MAX_SIZE 4096
 #define MAX_LINE_SIZE 128
@@ -452,16 +452,20 @@ void host(void){
         pch = strtok (NULL, " ");
     }
     fclose(fp);
+    fp = fopen("send_body.txt", "rb");
+    fseek(fp, 0L, SEEK_END);
+    long fsize = ftell(fp);
+    fseek(fp, 0L, SEEK_SET);
+    char *fbuffer = new char[fsize];
+    fread(fbuffer, fsize, 1, fp);
+    fclose(fp);
+    cout << fsize << endl;
 	#ifdef DEBUG
 		cout << "I am end host #" << hostID << "!" << endl;
 	#endif
     //bind socket 
     int sockfd = create_cs3516_socket();
-    int datalen = 10;
-    char data[10];
     struct iphdr overlayIP;
-    
-    
     //We're using IPv4
     overlayIP.version=4;
     //TODO figure out what this should actually be...
@@ -483,22 +487,33 @@ void host(void){
     overlayUDP.dest=htons(atoi(destport));;
     //We won't calculate the checksum for now
     overlayUDP.check=0;
-    //just the header and the data
-    overlayUDP.len = sizeof(struct udphdr)+datalen;
-    //no options in our IP header, just the header and the UDP packet
-    overlayIP.tot_len = sizeof(iphdr)+overlayUDP.len;
-    
-    char *packetbuffer = (char*)malloc(overlayIP.tot_len);
-    //put ip header at start of packet
-    memcpy(packetbuffer, &overlayIP, sizeof(struct iphdr));
-    //put udp header after ip header
-    memcpy(packetbuffer+sizeof(struct iphdr),&overlayUDP,sizeof(struct udphdr));
-    //put data after udp header
-    memcpy(packetbuffer+sizeof(struct iphdr)+sizeof(struct udphdr),data,datalen);
-    //TODO determine router IP and fix destination IP
-    cs3516_send(sockfd, packetbuffer, overlayIP.tot_len, overlayIP.saddr);
-    //once we have sent the packet we don't need to keep it
-    free(packetbuffer);
+    for(int i=0; i<fsize; i+=MAX_PACKET_SIZE){
+        overlayIP.id=i/MAX_PACKET_SIZE;
+        int msgsize;
+        if((fsize-i)<MAX_PACKET_SIZE){
+            //final segment (size less than 1000
+            msgsize = fsize-i;
+        } else {
+            //segment of size 1000
+            msgsize = MAX_PACKET_SIZE;
+        }
+        overlayUDP.len = sizeof(struct udphdr)+msgsize;
+        //just the header and the data
+        overlayIP.tot_len = sizeof(iphdr)+overlayUDP.len;
+        //no options in our IP header, just the header and the UDP packet
+        char *packetbuffer = (char*)malloc(overlayIP.tot_len);
+        //put ip header at start of packet
+        memcpy(packetbuffer, &overlayIP, sizeof(struct iphdr));
+        //put udp header after ip header
+        memcpy(packetbuffer+sizeof(struct iphdr),&overlayUDP,sizeof(struct udphdr));
+        //put data after udp header
+        memcpy(packetbuffer+sizeof(struct iphdr)+sizeof(struct udphdr),fbuffer+i,msgsize);
+        //TODO determine router IP and fix destination IP
+        cs3516_send(sockfd, packetbuffer, overlayIP.tot_len, overlayIP.saddr);
+        //once we have sent the packet we don't need to keep it
+        free(packetbuffer);
+    }
+    delete(fbuffer);
     //TODO non blocking receives and processing of received packets
     char receivebuffer[MAX_PACKET_SIZE];
     cs3516_recv(sockfd, receivebuffer, MAX_PACKET_SIZE);
