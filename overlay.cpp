@@ -374,7 +374,6 @@ void router(void) {
         //check if we have anything to read
         select(sockfd+1, &readfds, NULL, NULL, &timeoutval);
         //while we have a packet to receive, handle it
-        //TODO decide if this is good behavior
         while(FD_ISSET(sockfd, &readfds)){
             struct message *receivemessage = new struct message();
             receivemessage->buffer = (char*)malloc(MAX_PACKET_SIZE);
@@ -413,8 +412,8 @@ void router(void) {
             }
             select(sockfd+1, &readfds, NULL, NULL, &timeoutval);
         }
-        //look for the first interface with data to send and send one of their packets
-        //TODO decide if there is a better way to do this (one from each buffer?)
+        //look at queues to see if any send delays have elapsed
+        //TODO per-queue send delay as specified by the assignment
 	    for(map<string, deque<struct message *> >::iterator i = outputbuffers.begin(); i != outputbuffers.end(); i++) {
 	    	string interface = (*i).first;
 	    	deque<struct message *> buffer = (*i).second;
@@ -422,8 +421,7 @@ void router(void) {
 		        struct message* currentmsg = buffer.front();
 		        time_t currenttime;
 		        time(&currenttime);
-		        int waited = (int)difftime(currentmsg->recvtime, currenttime);
-		        //TODO use waited and wait time to determine if a packet should be sent
+		        double waited = difftime(currentmsg->recvtime, currenttime);
 		        if(waited>((double)myconf.sendDelay/1000)){
 		            //4 because IPv4
 		            char interfacebytes[4];
@@ -473,9 +471,7 @@ void host(void){
     overlayIP.ttl=configuration.defaultTTL;
     //We're going to be using UDP for all our packets
     overlayIP.protocol=IPPROTO_UDP;
-    //TODO calculate packet sizes and checksums
-    //TODO ip_ident
-    //TODO read addresses from file
+    //TODO calculate checksums
     char* srcip = (char*)endIPs[hostID].overlay.c_str();
     //set ip addresses in header
     inet_pton(AF_INET, srcip, &overlayIP.saddr);
@@ -515,6 +511,7 @@ void host(void){
     }
     delete(fbuffer);
     //TODO non blocking receives and processing of received packets
+    //TODO host logging
     char receivebuffer[MAX_PACKET_SIZE];
     cs3516_recv(sockfd, receivebuffer, MAX_PACKET_SIZE);
 }
