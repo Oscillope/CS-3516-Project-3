@@ -451,6 +451,7 @@ void host(void){
         strcpy(destport, pch);
         pch = strtok (NULL, " ");
     }
+    fclose(fp);
 	#ifdef DEBUG
 		cout << "I am end host #" << hostID << "!" << endl;
 	#endif
