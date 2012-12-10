@@ -35,6 +35,7 @@ void router(void);
 void host(unsigned long routerIP);
 void makeTrie(void);
 void readConfig(string filename);
+int lookupHost(string realIP, bool* isRouter);
 int nextSize(char getSize[MAX_SIZE], int cursor);
 int writetofile(char* buffer, size_t size);
 int recvFile(int sock, char *buffer, int buff_size, struct sockaddr *from);
@@ -457,13 +458,20 @@ void router(void) {
         //TODO per-queue send delay as specified by the assignment
 	    for(map<string, deque<struct message *> >::iterator i = outputbuffers.begin(); i != outputbuffers.end(); i++) {
 	    	string interface = (*i).first;
+	    	double delay = 0;
+	    	bool isRouter = false;
+	    	int hostToSend = lookupHost(interface, &isRouter);
+	    	if(isRouter)
+				delay = routerRouter[hostToSend].sendDelay;
+			else
+				delay = routerEnd[hostToSend].sendDelay;
 	    	deque<struct message *> buffer = (*i).second;
 		    if(buffer.size()>0){
 		        struct message* currentmsg = buffer.front();
 		        time_t currenttime;
 		        time(&currenttime);
 		        double waited = difftime(currenttime, currentmsg->recvtime);
-		        if(waited>((double)myconf.sendDelay/1000)){
+		        if(waited>(delay/1000)){
 		            unsigned int interfacebytes;
 		            //convert address to bytes
 		            inet_pton(AF_INET, (char*)interface.c_str(), (void *)&interfacebytes);
@@ -481,6 +489,29 @@ void router(void) {
 	    }
     }
 }
+
+int lookupHost(string realIP, bool* isRouter) {
+	map<int, string>::iterator routeit;;
+	for(routeit = routerIPs.begin(); routeit != routerIPs.end(); routeit++) {
+		if(!(*routeit).second.compare(realIP)) {
+			*isRouter = true;
+			return (*routeit).first;
+			break;
+		}
+	}
+	map<int, hostIP>::iterator endit;
+	for(endit = endIPs.begin(); endit != endIPs.end(); endit++) {
+		if(!(*endit).second.real.compare(realIP)) {
+			*isRouter = false;
+			return (*endit).first;
+			break;
+		}
+	}
+	fprintf(stderr, "Are you sure your configuration file is correct? I couldn't find the specified router.");
+	return -1;
+}
+	
+
 void host(unsigned long routerIP){
     FILE *fp = fopen("send_config.txt", "r");
     char str[MAX_LINE_SIZE];
