@@ -8,6 +8,9 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <time.h>
+#include <sys/select.h>
+#include <fcntl.h>
+#include <assert.h>
 //Networking Libraries
 #include <ifaddrs.h>
 #include <arpa/inet.h>
@@ -338,6 +341,7 @@ void makeTrie(void) {
         for(stringit = prestring.begin(); stringit != prestring.end(); stringit++) {
 			if(*stringit == '/') {
 				strcpy(temp, prestring.substr(0, distance(prestring.begin(),stringit)).c_str());
+				cout << "Temp: " << temp << endl;
 				inet_pton(AF_INET, temp, (void *)&tempFix.prefix);
 				stringit++;
 				size[0] = *stringit;
@@ -351,7 +355,14 @@ void makeTrie(void) {
 			cout << "Prefix: " << tempFix.prefix << "/" << (int)tempFix.size << " for router: " << routerIPs[j->first] << endl;
 		#endif
         hosts.insert(tempFix, routerIPs[j->first]);
+        #ifdef DEBUG
+			cout << "Testing trie." << endl;
+			int testaddr;
+			inet_pton(AF_INET, "1.2.3.1", (void *)&testaddr);
+			cout << testaddr << hosts.search(testaddr) << endl;
+		#endif
     }
+    
 }
 
 void router(void) {
@@ -367,14 +378,27 @@ void router(void) {
 	FD_SET(sockfd, &readfds);
 	//We want a truly nonblocking call so...
 	struct timeval timeoutval;
-	timeoutval.tv_sec = 0;
+	timeoutval.tv_sec = 10;
 	timeoutval.tv_usec = 0;
     map<string, deque<struct message *> > outputbuffers;
+    map<int, hostIP>::iterator it;
+    struct cidrprefix tempFix;
+    for(it = endIPs.begin(); it != endIPs.end(); it++) {
+		inet_pton(AF_INET, (*it).second.overlay.c_str(), (void *)&tempFix.prefix);
+		tempFix.size = 32;
+		hosts.insert(tempFix, (*it).second.real);
+		outputbuffers[(*it).second.real] = *(new deque<struct message *>);	//Try to access the output buffer for this IP, but since it won't exist, create one.
+		#ifdef DEBUG
+			//cout << outputbuffers.find((*it).second.real) << endl;
+			cout << "I just inserted " << hosts.search(tempFix.prefix) << endl;
+		#endif
+	}
+		
     while(TRUE){
         //check if we have anything to read
         select(sockfd+1, &readfds, NULL, NULL, &timeoutval);
         //while we have a packet to receive, handle it
-        while(FD_ISSET(sockfd, &readfds)){
+        if(FD_ISSET(sockfd, &readfds)){
 			#ifdef DEBUG
 				cout << "Received a packet!" << endl;
 			#endif
@@ -385,25 +409,29 @@ void router(void) {
             iphdr *ip = (iphdr*)(receivemessage->buffer);
 	        
 	        //get the real ip address of the destination
-	        string interface = hosts.search((uint32_t)(ip->daddr));
+	        string interface = hosts.search((uint32_t)(ip->daddr)); 
+	        cout << "Going to router: " << interface << endl;
 	        deque<struct message *> outputqueue;
 	        //Get some info from the packet for logging purposes
 	        char srcstr[INET_ADDRSTRLEN], dststr[INET_ADDRSTRLEN];
             inet_ntop(AF_INET, &(ip->saddr), srcstr, INET_ADDRSTRLEN);
 	        inet_ntop(AF_INET, &(ip->daddr), dststr, INET_ADDRSTRLEN);
+	        cout << "This fella is going to " << dststr << endl;
 	        short id = ntohs(ip->id);
 	        //get the output queue
+	        cout << "Interface: " << interface << endl;
 	        if(outputbuffers.find(interface)!=outputbuffers.end()){
 	            outputqueue = outputbuffers.find(interface)->second;
 	        } else {
 	            //we don't know who this is! Log it and drop that packet like it's hot
 	            writetolog(srcstr, dststr, id, "NO_ROUTE_TO_HOST", "");
+	            continue;
 	        }
 	        //decrement the ttl value
             (ip->ttl)--;
             if((ip->ttl)>0){
                 if(outputqueue.size()<=configuration.queueLength){
-                    outputqueue.push_back(receivemessage);
+                    outputbuffers[interface].push_back(receivemessage);
                     writetolog(srcstr, dststr, id, "SENT_OK", interface);
                 } else {
                     //drop the packet and log
@@ -413,25 +441,28 @@ void router(void) {
                 //drop the packet and log
                 writetolog(srcstr, dststr, id, "TTL_EXPIRED", "");
             }
-            select(sockfd+1, &readfds, NULL, NULL, &timeoutval);
         }
         //look at queues to see if any send delays have elapsed
         //TODO per-queue send delay as specified by the assignment
 	    for(map<string, deque<struct message *> >::iterator i = outputbuffers.begin(); i != outputbuffers.end(); i++) {
 	    	string interface = (*i).first;
 	    	deque<struct message *> buffer = (*i).second;
+	    	cout << "Interface: " << interface << endl;
+	    	cout << "Size: " << buffer.size() << endl;
 		    if(buffer.size()>0){
 		        struct message* currentmsg = buffer.front();
 		        time_t currenttime;
 		        time(&currenttime);
-		        double waited = difftime(currentmsg->recvtime, currenttime);
+		        double waited = difftime(currenttime, currentmsg->recvtime);
+		        cout << waited << endl;
 		        if(waited>((double)myconf.sendDelay/1000)){
 		            //4 because IPv4
-		            char interfacebytes[4];
+		            unsigned int interfacebytes;
 		            //convert address to bytes
-		            inet_pton(AF_INET, (char*)interface.c_str(), interfacebytes);
-		            cs3516_send(sockfd, currentmsg->buffer, MAX_PACKET_SIZE, (unsigned int)(*interfacebytes));
-                    free(currentmsg->buffer);
+		            inet_pton(AF_INET, (char*)interface.c_str(), (void *)&interfacebytes);
+		            cout << "Down to the nitty-gritty: sending the packet." << endl;
+		            cs3516_send(sockfd, currentmsg->buffer, MAX_PACKET_SIZE, interfacebytes);
+                    //free(currentmsg->buffer);
                     delete currentmsg;
                     buffer.pop_front();
                 }
@@ -452,6 +483,7 @@ void host(void){
         strcpy(destport, pch);
         pch = strtok (NULL, " ");
     }
+    strcpy(dstip, str);
     fclose(fp);
     unsigned long routerIP;
     inet_pton(AF_INET, "10.10.10.89", (void *)&routerIP);
@@ -463,7 +495,7 @@ void host(void){
     char *fbuffer = new char[fsize];
     fread(fbuffer, fsize, 1, fp);
     fclose(fp);
-    cout << "Sending file of size: " << fsize << endl;
+    cout << "Sending file of size: " << fsize << " to " << dstip << endl;
 	#ifdef DEBUG
 		cout << "I am end host #" << hostID << "!" << endl;
 	#endif
@@ -531,6 +563,7 @@ void host(void){
 
 int writetofile(char* buffer, size_t size){
     FILE *fp;
+    cout << "Writing a file!" << endl;
     char name[9] = "received";
     fp=fopen(name, "ab");
     size_t written = fwrite(buffer, sizeof(char), size, fp);
@@ -543,6 +576,7 @@ int recvFile(int sock, char *buffer, int buff_size, struct sockaddr *from) {
     int n;
     fromlen = sizeof(struct sockaddr_in);
     n = recvfrom(sock, buffer, buff_size, 0, from, &fromlen);
+    cout << "I've got something!" << endl;
     return n;
 }
 

@@ -64,7 +64,7 @@ string trie::search(uint32_t ip) {
     string lastval = "";
     struct trienode *currentnode = &(this->listhead);
     int i = 0;
-    while((currentnode!=NULL)&&i<32){
+    while((currentnode!=NULL)&&i<=32){
         uint32_t mask = 0x80000000>>i;
         i++;
         if((currentnode->value).compare("")){
