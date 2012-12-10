@@ -545,7 +545,6 @@ void host(void){
         //TODO determine router IP and fix destination IP
         cout << overlayIP.tot_len << endl;
         cout << packetbuffer << endl;
-        
         cs3516_send(sockfd, packetbuffer, overlayIP.tot_len, routerIP);
         //once we have sent the packet we don't need to keep it
         free(packetbuffer);
@@ -562,7 +561,7 @@ void host(void){
     struct udphdr *udp = (char*)receivebuffer+sizeof(struct iphdr);
     char *data = receivebuffer+sizeof(struct iphdr)+sizeof(struct udphdr);
     //logRecv();
-    writetofile(data, sizeof(receivebuffer));
+    writetofile(data, sizeof(receivebuffer)-sizeof(struct udphdr)-sizeof(struct iphdr));
 }
 
 int writetofile(char* buffer, size_t size){
