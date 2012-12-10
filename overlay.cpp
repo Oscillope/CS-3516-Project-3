@@ -530,7 +530,7 @@ void host(unsigned long routerIP){
     
     fp = fopen("send_body.txt", "rb");
     fseek(fp, 0L, SEEK_END);
-    long fsize = ftell(fp);
+    int fsize = (int)ftell(fp);
     fseek(fp, 0L, SEEK_SET);
     char *fbuffer = new char[fsize];
     fread(fbuffer, fsize, 1, fp);
@@ -544,7 +544,6 @@ void host(unsigned long routerIP){
     struct iphdr overlayIP;
     //We're using IPv4
     overlayIP.version=4;
-    //TODO figure out what this should actually be...
     overlayIP.tos=0;
     overlayIP.ttl=configuration.defaultTTL;
     //We're going to be using UDP for all our packets
@@ -561,7 +560,7 @@ void host(unsigned long routerIP){
     overlayUDP.dest=htons(atoi(destport));;
     //We won't calculate the checksum for now
     overlayUDP.check=0;
-    overlayUDP.len = sizeof(fsize);
+    overlayUDP.len = sizeof(fsize) + sizeof(struct udphdr);
     overlayIP.tot_len = sizeof(iphdr)+overlayUDP.len;
     char *packetbuffer = (char*)malloc(overlayIP.tot_len);
     //put ip header at start of packet
@@ -637,7 +636,7 @@ int logstats(struct iphdr ip, struct udphdr udp){
     int dstport = (int)ntohs(udp.dest);
     cout << "logging stats!" << endl;
     fp=fopen("received_stats.txt", "ab");
-    fprintf(fp, "%s %s %d %d", srcip, dstip, srcport, dstport);
+    fprintf(fp, "%s %s %d %d\n", srcip, dstip, srcport, dstport);
     fclose(fp); //we're done writing to the file
     return TRUE;
 }
@@ -645,9 +644,10 @@ int recvFile(int sock, char *buffer, struct sockaddr *from) {
     socklen_t fromlen;
     int n, filesize;
     fromlen = sizeof(struct sockaddr_in);
-    n = recvfrom(sock, &filesize, sizeof(int), 0, from, &fromlen);
+    n = recvfrom(sock, buffer, MAX_PACKET_SIZE, 0, from, &fromlen);
+    filesize = *(buffer + sizeof(struct iphdr) + sizeof(struct udphdr));
     n = recvfrom(sock, buffer, filesize, 0, from, &fromlen);
-    cout << "I've got something!" << endl;
+    cout << "Received file of size " << filesize << endl;
     return n;
 }
 
