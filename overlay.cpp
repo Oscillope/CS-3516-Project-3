@@ -37,7 +37,7 @@ void makeTrie(void);
 void readConfig(string filename);
 int nextSize(char getSize[MAX_SIZE], int cursor);
 int writetofile(char* buffer, size_t size);
-int recvFile(int sock, char *buffer, int buff_size, struct sockaddr *from);
+int recvFile(int sock, char *buffer, struct sockaddr *from);
 void logRecv();
 void writetolog(string srcip, string dstip, int ipident, string statuscode, string nexthop);
 
@@ -521,6 +521,20 @@ void host(void){
     overlayUDP.dest=htons(atoi(destport));;
     //We won't calculate the checksum for now
     overlayUDP.check=0;
+    overlayUDP.len = sizeof(fsize);
+    overlayIP.tot_len = sizeof(iphdr)+overlayUDP.len;
+    char *packetbuffer = (char*)malloc(overlayIP.tot_len);
+    //put ip header at start of packet
+    memcpy(packetbuffer, &overlayIP, sizeof(struct iphdr));
+    //put udp header after ip header
+    memcpy(packetbuffer+sizeof(struct iphdr),&overlayUDP,sizeof(struct udphdr));
+    //put data after udp header
+    memcpy(packetbuffer+sizeof(struct iphdr)+sizeof(struct udphdr),&fsize,sizeof(fsize));
+    //TODO determine router IP and fix destination IP
+    cout << overlayIP.tot_len << endl;
+    cout << packetbuffer << endl;
+    cs3516_send(sockfd, packetbuffer, overlayIP.tot_len, routerIP);
+    free(packetbuffer);
     for(int i=0; i<fsize; i+=MAX_PACKET_SIZE){
         overlayIP.id=i/MAX_PACKET_SIZE;
         int msgsize;
@@ -535,7 +549,7 @@ void host(void){
         //just the header and the data
         overlayIP.tot_len = sizeof(iphdr)+overlayUDP.len;
         //no options in our IP header, just the header and the UDP packet
-        char *packetbuffer = (char*)malloc(overlayIP.tot_len);
+        packetbuffer = (char*)malloc(overlayIP.tot_len);
         //put ip header at start of packet
         memcpy(packetbuffer, &overlayIP, sizeof(struct iphdr));
         //put udp header after ip header
@@ -553,15 +567,17 @@ void host(void){
     delete(fbuffer);
     //TODO non blocking receives and processing of received packets
     //TODO host logging
-    char receivebuffer[MAX_PACKET_SIZE];
-    struct sockaddr from;
-    recvFile(sockfd, receivebuffer, MAX_PACKET_SIZE, &from);
-    //get headers and data
-    struct iphdr *ip = receivebuffer;
-    struct udphdr *udp = (char*)receivebuffer+sizeof(struct iphdr);
-    char *data = receivebuffer+sizeof(struct iphdr)+sizeof(struct udphdr);
-    //logRecv();
-    writetofile(data, sizeof(receivebuffer)-sizeof(struct udphdr)-sizeof(struct iphdr));
+    while(TRUE){
+        char receivebuffer[MAX_PACKET_SIZE];
+        struct sockaddr from;
+        recvFile(sockfd, receivebuffer, &from);
+        //get headers and data
+        struct iphdr *ip = (struct iphdr*)receivebuffer;
+        struct udphdr *udp = (struct udphdr*)((char*)receivebuffer+sizeof(struct iphdr));
+        char *data = receivebuffer+sizeof(struct iphdr)+sizeof(struct udphdr);
+        //logRecv();
+        writetofile(data, sizeof(receivebuffer)-sizeof(struct udphdr)-sizeof(struct iphdr));
+    }
 }
 
 int writetofile(char* buffer, size_t size){
@@ -574,11 +590,12 @@ int writetofile(char* buffer, size_t size){
     return written!=size;
 }
 
-int recvFile(int sock, char *buffer, int buff_size, struct sockaddr *from) {
+int recvFile(int sock, char *buffer, struct sockaddr *from) {
     socklen_t fromlen;
-    int n;
+    int n, filesize;
     fromlen = sizeof(struct sockaddr_in);
-    n = recvfrom(sock, buffer, buff_size, 0, from, &fromlen);
+    n = recvfrom(sock, &filesize, sizeof(int), 0, from, &fromlen);
+    n = recvfrom(sock, buffer, filesize, 0, from, &fromlen);
     cout << "I've got something!" << endl;
     return n;
 }
