@@ -33,6 +33,9 @@ void host(void);
 void makeTrie(void);
 void readConfig(string filename);
 int nextSize(char getSize[MAX_SIZE], int cursor);
+int writetofile(char* buffer, size_t size);
+int recvFile(int sock, char *buffer, int buff_size, struct sockaddr *from);
+void logRecv();
 void writetolog(string srcip, string dstip, int ipident, string statuscode, string nexthop);
 
 struct globalConf {
@@ -320,9 +323,6 @@ int nextSize(char getSize[MAX_SIZE], int cursor) {
 		size++;
 		cursor++;
 	}
-	#ifdef DEBUG
-		printf("Size of next element: %d\n", size);
-	#endif
 	return size;
 }
 
@@ -375,6 +375,9 @@ void router(void) {
         select(sockfd+1, &readfds, NULL, NULL, &timeoutval);
         //while we have a packet to receive, handle it
         while(FD_ISSET(sockfd, &readfds)){
+			#ifdef DEBUG
+				cout << "Received a packet!" << endl;
+			#endif
             struct message *receivemessage = new struct message();
             receivemessage->buffer = (char*)malloc(MAX_PACKET_SIZE);
             cs3516_recv(sockfd, receivemessage->buffer, MAX_PACKET_SIZE);
@@ -450,6 +453,9 @@ void host(void){
         pch = strtok (NULL, " ");
     }
     fclose(fp);
+    unsigned long routerIP;
+    inet_pton(AF_INET, "10.10.10.89", (void *)&routerIP);
+    
     fp = fopen("send_body.txt", "rb");
     fseek(fp, 0L, SEEK_END);
     long fsize = ftell(fp);
@@ -457,7 +463,7 @@ void host(void){
     char *fbuffer = new char[fsize];
     fread(fbuffer, fsize, 1, fp);
     fclose(fp);
-    cout << fsize << endl;
+    cout << "Sending file of size: " << fsize << endl;
 	#ifdef DEBUG
 		cout << "I am end host #" << hostID << "!" << endl;
 	#endif
@@ -487,7 +493,7 @@ void host(void){
         overlayIP.id=i/MAX_PACKET_SIZE;
         int msgsize;
         if((fsize-i)<MAX_PACKET_SIZE){
-            //final segment (size less than 1000
+            //final segment (size less than 1000)
             msgsize = fsize-i;
         } else {
             //segment of size 1000
@@ -505,16 +511,41 @@ void host(void){
         //put data after udp header
         memcpy(packetbuffer+sizeof(struct iphdr)+sizeof(struct udphdr),fbuffer+i,msgsize);
         //TODO determine router IP and fix destination IP
-        cs3516_send(sockfd, packetbuffer, overlayIP.tot_len, overlayIP.saddr);
+        cout << overlayIP.tot_len << endl;
+        cout << packetbuffer << endl;
+        
+        cs3516_send(sockfd, packetbuffer, overlayIP.tot_len, routerIP);
         //once we have sent the packet we don't need to keep it
         free(packetbuffer);
+        cout << "Sent " << msgsize << " bytes." << endl;
     }
     delete(fbuffer);
     //TODO non blocking receives and processing of received packets
     //TODO host logging
     char receivebuffer[MAX_PACKET_SIZE];
-    cs3516_recv(sockfd, receivebuffer, MAX_PACKET_SIZE);
+    struct sockaddr from;
+    recvFile(sockfd, receivebuffer, MAX_PACKET_SIZE, &from);
+    //logRecv();
+    writetofile(receivebuffer, sizeof(receivebuffer));
 }
+
+int writetofile(char* buffer, size_t size){
+    FILE *fp;
+    char name[9] = "received";
+    fp=fopen(name, "ab");
+    size_t written = fwrite(buffer, sizeof(char), size, fp);
+    fclose(fp); //we're done writing to the file
+    return written!=size;
+}
+
+int recvFile(int sock, char *buffer, int buff_size, struct sockaddr *from) {
+    socklen_t fromlen;
+    int n;
+    fromlen = sizeof(struct sockaddr_in);
+    n = recvfrom(sock, buffer, buff_size, 0, from, &fromlen);
+    return n;
+}
+
 void writetolog(string srcip, string dstip, int ipident, string statuscode, string nexthop){
     char ftime[256];
     time_t ctime = time(NULL);
