@@ -40,6 +40,7 @@ int writetofile(char* buffer, size_t size);
 int recvFile(int sock, char *buffer, struct sockaddr *from);
 void logRecv();
 void writetolog(string srcip, string dstip, int ipident, string statuscode, string nexthop);
+int logstats(struct iphdr ip, struct udphdr udp);
 
 struct globalConf {
 	unsigned int queueLength;
@@ -575,7 +576,7 @@ void host(void){
         struct iphdr *ip = (struct iphdr*)receivebuffer;
         struct udphdr *udp = (struct udphdr*)((char*)receivebuffer+sizeof(struct iphdr));
         char *data = receivebuffer+sizeof(struct iphdr)+sizeof(struct udphdr);
-        //logRecv();
+        logstats(*ip, *udp);
         writetofile(data, sizeof(receivebuffer)-sizeof(struct udphdr)-sizeof(struct iphdr));
     }
 }
@@ -583,13 +584,24 @@ void host(void){
 int writetofile(char* buffer, size_t size){
     FILE *fp;
     cout << "Writing a file!" << endl;
-    char name[9] = "received";
-    fp=fopen(name, "ab");
+    fp=fopen("received", "ab");
     size_t written = fwrite(buffer, sizeof(char), size, fp);
     fclose(fp); //we're done writing to the file
     return written!=size;
 }
-
+int logstats(struct iphdr ip, struct udphdr udp){
+    FILE *fp;
+    char srcip[INET_ADDRSTRLEN], dstip[INET_ADDRSTRLEN];
+    inet_ntop(AF_INET,&(ip.saddr), srcip, INET_ADDRSTRLEN);
+    inet_ntop(AF_INET,&(ip.daddr), dstip, INET_ADDRSTRLEN);
+    int srcport = (int)ntohs(udp.source);
+    int dstport = (int)ntohs(udp.dest);
+    cout << "logging stats!" << endl;
+    fp=fopen("received_stats.txt", "ab");
+    fprintf(fp, "%s %s %d %d", srcip, dstip, srcport, dstport);
+    fclose(fp); //we're done writing to the file
+    return TRUE;
+}
 int recvFile(int sock, char *buffer, struct sockaddr *from) {
     socklen_t fromlen;
     int n, filesize;
