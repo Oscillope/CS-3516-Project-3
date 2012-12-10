@@ -557,8 +557,12 @@ void host(void){
     char receivebuffer[MAX_PACKET_SIZE];
     struct sockaddr from;
     recvFile(sockfd, receivebuffer, MAX_PACKET_SIZE, &from);
+    //get headers and data
+    struct iphdr *ip = receivebuffer;
+    struct udphdr *udp = (char*)receivebuffer+sizeof(struct iphdr);
+    char *data = receivebuffer+sizeof(struct iphdr)+sizeof(struct udphdr);
     //logRecv();
-    writetofile(receivebuffer, sizeof(receivebuffer));
+    writetofile(data, sizeof(receivebuffer));
 }
 
 int writetofile(char* buffer, size_t size){
