@@ -372,6 +372,7 @@ void router(void) {
 	routerConf myconf = routerRouter[hostID];
     //bind socket 
     int sockfd = create_cs3516_socket();
+    //bool sent = FALSE;
     //initialize for select() call
     fd_set readfds;
 	FD_ZERO(&readfds);
@@ -396,6 +397,8 @@ void router(void) {
 		
     while(TRUE){
         //check if we have anything to read
+        FD_ZERO(&readfds);
+		FD_SET(sockfd, &readfds);
         select(sockfd+1, &readfds, NULL, NULL, &timeoutval);
         //while we have a packet to receive, handle it
         if(FD_ISSET(sockfd, &readfds)){
@@ -444,27 +447,28 @@ void router(void) {
         }
         //look at queues to see if any send delays have elapsed
         //TODO per-queue send delay as specified by the assignment
+        //if(!sent)
 	    for(map<string, deque<struct message *> >::iterator i = outputbuffers.begin(); i != outputbuffers.end(); i++) {
 	    	string interface = (*i).first;
 	    	deque<struct message *> buffer = (*i).second;
-	    	cout << "Interface: " << interface << endl;
-	    	cout << "Size: " << buffer.size() << endl;
+	    	//cout << "Interface: " << interface << endl;
+	    	//cout << "Size: " << buffer.size() << endl;
 		    if(buffer.size()>0){
 		        struct message* currentmsg = buffer.front();
 		        time_t currenttime;
 		        time(&currenttime);
 		        double waited = difftime(currenttime, currentmsg->recvtime);
-		        cout << waited << endl;
 		        if(waited>((double)myconf.sendDelay/1000)){
-		            //4 because IPv4
 		            unsigned int interfacebytes;
 		            //convert address to bytes
 		            inet_pton(AF_INET, (char*)interface.c_str(), (void *)&interfacebytes);
 		            cout << "Down to the nitty-gritty: sending the packet." << endl;
-		            cs3516_send(sockfd, currentmsg->buffer, MAX_PACKET_SIZE, interfacebytes);
+		            int status = cs3516_send(sockfd, currentmsg->buffer, MAX_PACKET_SIZE, interfacebytes);
+                    //if(status) sent = TRUE;
+                    if(!status) fprintf(stderr, "There was an error sending the file. No bytes were sent.");
                     //free(currentmsg->buffer);
                     delete currentmsg;
-                    buffer.pop_front();
+                    outputbuffers[interface].pop_front();
                 }
 		    }
 	    }
