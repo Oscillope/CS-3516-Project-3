@@ -380,7 +380,6 @@ void router(void) {
 	#ifdef DEBUG
 		cout << "I am router #" << hostID << "!" << endl;
 	#endif
-	routerConf myconf = routerRouter[hostID];
     //bind socket 
     int sockfd = create_cs3516_socket();
     //initialize for select() call
