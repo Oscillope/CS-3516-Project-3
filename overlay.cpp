@@ -32,7 +32,7 @@ using namespace std;
 #define MAX_LINE_SIZE 128
 
 void router(void);
-void host(void);
+void host(unsigned long routerIP);
 void makeTrie(void);
 void readConfig(string filename);
 int nextSize(char getSize[MAX_SIZE], int cursor);
@@ -160,7 +160,17 @@ int main(int argc, char** argv) {
 		exit(1);
 	}
 	if(isRouter) router();
-	else host();
+	else {
+		uint32_t myIP = 0;
+		inet_pton(AF_INET, endIPs[hostID].overlay.c_str(), (void *)&myIP);
+		string myRouter = hosts.search(myIP);
+		#ifdef DEBUG
+			cout << "My router is: " << myRouter << endl;
+		#endif
+		unsigned long myRouterInt;
+		inet_pton(AF_INET, myRouter.c_str(), (void *)&myRouterInt);
+		host(myRouterInt);
+	}
 	return 0;
 }
 
@@ -372,7 +382,6 @@ void router(void) {
 	routerConf myconf = routerRouter[hostID];
     //bind socket 
     int sockfd = create_cs3516_socket();
-    //bool sent = FALSE;
     //initialize for select() call
     fd_set readfds;
 	FD_ZERO(&readfds);
@@ -390,7 +399,6 @@ void router(void) {
 		hosts.insert(tempFix, (*it).second.real);
 		outputbuffers[(*it).second.real] = *(new deque<struct message *>);	//Try to access the output buffer for this IP, but since it won't exist, create one.
 		#ifdef DEBUG
-			//cout << outputbuffers.find((*it).second.real) << endl;
 			cout << "I just inserted " << hosts.search(tempFix.prefix) << endl;
 		#endif
 	}
@@ -447,12 +455,9 @@ void router(void) {
         }
         //look at queues to see if any send delays have elapsed
         //TODO per-queue send delay as specified by the assignment
-        //if(!sent)
 	    for(map<string, deque<struct message *> >::iterator i = outputbuffers.begin(); i != outputbuffers.end(); i++) {
 	    	string interface = (*i).first;
 	    	deque<struct message *> buffer = (*i).second;
-	    	//cout << "Interface: " << interface << endl;
-	    	//cout << "Size: " << buffer.size() << endl;
 		    if(buffer.size()>0){
 		        struct message* currentmsg = buffer.front();
 		        time_t currenttime;
@@ -462,7 +467,9 @@ void router(void) {
 		            unsigned int interfacebytes;
 		            //convert address to bytes
 		            inet_pton(AF_INET, (char*)interface.c_str(), (void *)&interfacebytes);
-		            cout << "Down to the nitty-gritty: sending the packet." << endl;
+		            #ifdef DEBUG
+						cout << "Down to the nitty-gritty: sending the packet." << endl;
+					#endif
 		            int status = cs3516_send(sockfd, currentmsg->buffer, MAX_PACKET_SIZE, interfacebytes);
                     //if(status) sent = TRUE;
                     if(!status) fprintf(stderr, "There was an error sending the file. No bytes were sent.");
@@ -474,7 +481,7 @@ void router(void) {
 	    }
     }
 }
-void host(void){
+void host(unsigned long routerIP){
     FILE *fp = fopen("send_config.txt", "r");
     char str[MAX_LINE_SIZE];
     char dstip[INET_ADDRSTRLEN];
@@ -489,8 +496,6 @@ void host(void){
     }
     strcpy(dstip, str);
     fclose(fp);
-    unsigned long routerIP;
-    inet_pton(AF_INET, "10.10.10.89", (void *)&routerIP);
     
     fp = fopen("send_body.txt", "rb");
     fseek(fp, 0L, SEEK_END);
